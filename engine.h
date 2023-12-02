@@ -6,6 +6,7 @@
 #include <GLFW/glfw3.h>
 
 #include "player.h"
+#include "shader.h"
 #include "settings.h"
 
 // TODO: to be deleted
@@ -14,7 +15,7 @@
 
 struct Engine {
     Engine()
-        : player(*this)
+        : player(this), shader(this)
     {
         glfwInit();
 
@@ -28,17 +29,17 @@ struct Engine {
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         window = glfwCreateWindow(WIN_WIDTH, WIN_HEIGHT, "VulkanEngine", nullptr, nullptr);
 
-        // TODO: move into shader class
-        if (!vulkan.init(WIN_WIDTH, WIN_HEIGHT, vertexShaderText_PC_C, fragmentShaderText_C_C,
-            sizeof(glm::mat4x4), sizeof(coloredCubeData), coloredCubeData, sizeof(coloredCubeData[0]),
-            {{vk::Format::eR32G32B32A32Sfloat, 0}, {vk::Format::eR32G32B32A32Sfloat, 16}},
-            [this](const vk::Instance& instance) -> vk::SurfaceKHR {
-            VkSurfaceKHR surfaceKHR;
-            if (glfwCreateWindowSurface(instance, window, nullptr, &surfaceKHR))
-                return nullptr;
+        vulkan.init(WIN_WIDTH, WIN_HEIGHT, [this](const vk::Instance& instance) {
+            VkSurfaceKHR surfaceKHR = VK_NULL_HANDLE;
+            glfwCreateWindowSurface(instance, window, nullptr, &surfaceKHR);
             return surfaceKHR;
-        }))
-            throw std::runtime_error("Vulkan cannot initialize!");
+        });
+
+        shader.load("cube");
+        shader.write(coloredCubeData);
+        shader.write("mvp", glm::mat4(1));
+        shader.vert_format = {{vk::Format::eR32G32B32A32Sfloat, 0}, {vk::Format::eR32G32B32A32Sfloat, 16}};
+        vulkan.attachShader(shader.vert_shader, shader.frag_shader, shader.vertex, shader.uniforms.begin()->second, shader.vert_format);
 
         glfwSetWindowUserPointer(window, this);
         glfwSetMouseButtonCallback(window, [](GLFWwindow* window, int button, int action, int mods) {
@@ -95,12 +96,7 @@ struct Engine {
 
     void update() {
         player.update();
-
-        // TODO: move into shader class
-        auto mvp = player.proj * player.view;
-        mvp[1][1] *= -1;
-        vulkan.updateUniformBuffer(sizeof(mvp), &mvp);
-        //
+        shader.update();
 
         auto prev_t = std::exchange(t, glfwGetTime());
         dt = t - prev_t;
@@ -121,6 +117,7 @@ struct Engine {
     }
 
     Vulkan vulkan;
+    Shader shader;
     GLFWwindow* window;
     Player player;
     float frame_count = 0, fps = 0;

@@ -78,13 +78,22 @@ namespace {
 
 class Vulkan {
 public:
+    struct Buffer {
+        vk::Buffer buffer;
+        VmaAllocation memory;
+        void* data = nullptr;
+
+        size_t size = 0;
+        size_t stride = 0;
+    };
+
+public:
     Vulkan() = default;
     ~Vulkan() {
         device.waitIdle();
         device.destroyFence(drawFence);
         device.destroySemaphore(imageAcquiredSemaphore);
         device.destroyPipeline(graphicsPipeline);
-        vmaDestroyBuffer(vmaAllocator, vertexBuffer, vertexMemory);
         for(auto const& framebuffer : framebuffers)
             device.destroyFramebuffer(framebuffer);
 
@@ -94,8 +103,6 @@ public:
         device.destroyPipelineLayout(pipelineLayout);
         device.destroyDescriptorSetLayout(descriptorSetLayout);
 
-        vmaUnmapMemory(vmaAllocator, uniformDataMemory);
-        vmaDestroyBuffer(vmaAllocator, uniformDataBuffer, uniformDataMemory);
         device.destroyImageView(depthImageView);
         vmaDestroyImage(vmaAllocator, depthImage, depthMemory);
         vmaDestroyAllocator(vmaAllocator);
@@ -155,41 +162,27 @@ public:
         return *this;
     }
 
-    void updateUniformBuffer(size_t bufferSize, const void* uniformData) {
-        memcpy(uniformDataMapped, uniformData, bufferSize);
-    }
-
-    bool init(uint32_t width, uint32_t height, const std::string& vertShader, const std::string& fragShader, size_t uniformBufferSize, size_t vertexBufferSize, const void* vertexBufferData, size_t vertexBufferStride, const std::vector<std::pair<vk::Format, uint32_t>>& vertexInputeAttributeFormatOffset, std::function<vk::SurfaceKHR(const vk::Instance &)> getSurfaceKHR, std::function<bool(const vk::PhysicalDevice &)> pickDevice = {}) {
+    void init(uint32_t width, uint32_t height, std::function<vk::SurfaceKHR(const vk::Instance &)> getSurfaceKHR, std::function<bool(const vk::PhysicalDevice &)> pickDevice = {}) {
         initInstance();
-        if (!enumerateDevice(pickDevice))
-            return false;
-        if (!initDevice(getSurfaceKHR))
-            return false;
+        enumerateDevice(pickDevice);
+        initDevice(getSurfaceKHR);
         initCommandBuffer();
-        if (!initSwapChain(width, height))
-            return false;
+        initSwapChain(width, height);
         initDepthBuffer();
-        initUniformBuffer(uniformBufferSize);
         initPipelineLayout();
-        initDescriptorSet(uniformBufferSize);
         initRenderPass();
-
-        glslang::InitializeProcess();
-        auto vertexShaderModule = createShaderModule(vk::ShaderStageFlagBits::eVertex, vertShader);
-        auto fragmentShaderModule = createShaderModule(vk::ShaderStageFlagBits::eFragment, fragShader);
-        glslang::FinalizeProcess();
-
         initFrameBuffers();
-        initVertexBuffer(vertexBufferSize, vertexBufferData);
-        initPipeline(vertexShaderModule, fragmentShaderModule, vertexBufferStride, vertexInputeAttributeFormatOffset);
-
-        device.destroyShaderModule(vertexShaderModule);
-        device.destroyShaderModule(fragmentShaderModule);
 
         imageAcquiredSemaphore = device.createSemaphore({});
         drawFence = device.createFence({});
+    };
 
-        return true;
+    void attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule, const Buffer& vertex, const Buffer& uniform, const std::vector<std::pair<vk::Format, uint32_t>>& vertexInputeAttributeFormatOffset) {
+        vertexBuffer = vertex;
+        uniformBuffer = uniform;
+
+        initDescriptorSet(uniformBuffer.size);
+        initPipeline(vertexShaderModule, fragmentShaderModule, vertexBuffer.stride, vertexInputeAttributeFormatOffset);
     }
 
     void draw() {
@@ -207,7 +200,7 @@ public:
         commandBuffers[0].beginRenderPass(renderPassBeginInfo, vk::SubpassContents::eInline);
         commandBuffers[0].bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipeline);
         commandBuffers[0].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout, 0, descriptorSets, nullptr);
-        commandBuffers[0].bindVertexBuffers(0, vertexBuffer, {0});
+        commandBuffers[0].bindVertexBuffers(0, vertexBuffer.buffer, {0});
         commandBuffers[0].draw(12 * 3, 1, 0, 0);
         commandBuffers[0].endRenderPass();
         commandBuffers[0].end();
@@ -224,6 +217,58 @@ public:
         }
     }
 
+    Buffer createUniformBuffer(size_t size) {
+        Buffer buffer;
+        std::tie(buffer.buffer, buffer.memory) = createBuffer(size, vk::BufferUsageFlagBits::eUniformBuffer,
+            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+
+        buffer.stride = buffer.size = size;
+        vmaMapMemory(vmaAllocator, buffer.memory, &buffer.data);
+
+        return buffer;
+    }
+
+    void destroyUniformBuffer(const Buffer& buffer) {
+        if (buffer.size) {
+            vmaUnmapMemory(vmaAllocator, buffer.memory);
+            vmaDestroyBuffer(vmaAllocator, buffer.buffer, buffer.memory);
+        }
+    }
+
+    template<typename T, size_t Size>
+    Buffer createVertexBuffer(const T (&vertices)[Size]) {
+        Buffer buffer;
+        buffer.stride = sizeof(T);
+        buffer.size = sizeof(T) * Size;
+
+        std::tie(buffer.buffer, buffer.memory) = createBuffer(buffer.size, vk::BufferUsageFlagBits::eUniformBuffer,
+            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+
+        vmaMapMemory(vmaAllocator, buffer.memory, &buffer.data);
+        memcpy(buffer.data, vertices, buffer.size);
+        vmaUnmapMemory(vmaAllocator, buffer.memory);
+
+        return buffer;
+    }
+
+    void destroyVertexBuffer(const Buffer& buffer) {
+        if (buffer.size)
+            vmaDestroyBuffer(vmaAllocator, buffer.buffer, buffer.memory);
+    }
+
+    vk::ShaderModule createShaderModule(vk::ShaderStageFlagBits shaderStage, const std::string& shaderText) {
+        std::vector<unsigned int> shaderSPV;
+        if (!GLSLtoSPV(shaderStage, shaderText, shaderSPV)) {
+            throw std::runtime_error("Could not covert glsl shader to SPIRV");
+        }
+
+        return device.createShaderModule({{}, shaderSPV});
+    }
+
+    void destroyShaderModule(const vk::ShaderModule& shader) {
+        device.destroyShaderModule(shader);
+    }
+
 private:
     void initInstance() {
         static vk::DynamicLoader dl;
@@ -235,10 +280,10 @@ private:
         VULKAN_HPP_DEFAULT_DISPATCHER.init(instance);
     }
 
-    bool enumerateDevice(std::function<bool(const vk::PhysicalDevice &)> pickDevice) {
+    void enumerateDevice(std::function<bool(const vk::PhysicalDevice &)> pickDevice) {
         auto physicalDevices = instance.enumeratePhysicalDevices();
         if (physicalDevices.empty())
-            return false;
+            throw std::runtime_error("No vulkan device detected!");
 
         physicalDevice = physicalDevices.front();
 
@@ -247,14 +292,12 @@ private:
             if (it != physicalDevices.end())
                 physicalDevice = *it;
         }
-
-        return true;
     }
 
-    bool initDevice(std::function<vk::SurfaceKHR(const vk::Instance &)> getSurfaceKHR) {
+    void initDevice(std::function<vk::SurfaceKHR(const vk::Instance &)> getSurfaceKHR) {
         surface = getSurfaceKHR(instance);
         if (!surface)
-            return false;
+            throw std::runtime_error("Cannot get surface!");
 
         auto queueFamilyProperties = physicalDevice.getQueueFamilyProperties();
 
@@ -264,7 +307,7 @@ private:
         });
         graphicsQueueFamliyIndex = std::distance(queueFamilyProperties.begin(), it);
         if (graphicsQueueFamliyIndex >= queueFamilyProperties.size())
-            return false;
+            throw std::runtime_error("Cannot get graphics and compute queue!");
 
         // get presentation supported queue
         presentationQueueFamliyIndex = std::numeric_limits<uint32_t>::max();
@@ -274,7 +317,7 @@ private:
             }
         }
         if (presentationQueueFamliyIndex >= queueFamilyProperties.size())
-            return false;
+            throw std::runtime_error("Cannot get presentation queue!");
 
         if (graphicsQueueFamliyIndex == presentationQueueFamliyIndex) {
             vk::DeviceQueueCreateInfo deviceQueueCreateInfo({}, graphicsQueueFamliyIndex, 1);
@@ -311,8 +354,6 @@ private:
         allocatorCreateInfo.pVulkanFunctions       = &vulkanFunctions;
 
         vmaCreateAllocator(&allocatorCreateInfo, &vmaAllocator);
-
-        return true;
     }
 
     void initCommandBuffer() {
@@ -320,10 +361,10 @@ private:
         commandBuffers = device.allocateCommandBuffers({commandPool, vk::CommandBufferLevel::ePrimary, 1});
     }
 
-    bool initSwapChain(uint32_t width, uint32_t height) {
+    void initSwapChain(uint32_t width, uint32_t height) {
         auto formats = physicalDevice.getSurfaceFormatsKHR(surface);
         if (formats.empty())
-            return false;
+            throw std::runtime_error("No supported surface format!");
 
         vk::Format format = formats[0].format == vk::Format::eUndefined ? vk::Format::eR8G8B8A8Unorm : formats[0].format;
 
@@ -372,8 +413,6 @@ private:
             imageViewCreateInfo.image = image;
             swapChainImageViews.push_back(device.createImageView(imageViewCreateInfo));
         }
-
-        return true;
     }
 
     void initDepthBuffer() {
@@ -393,12 +432,6 @@ private:
         depthImageView = device.createImageView({{}, depthImage, vk::ImageViewType::e2D, depthFormat, {}, {vk::ImageAspectFlagBits::eDepth, 0, 1, 0, 1}});
     }
 
-    void initUniformBuffer(size_t size) {
-        std::tie(uniformDataBuffer, uniformDataMemory) = createBuffer(size, vk::BufferUsageFlagBits::eUniformBuffer,
-            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
-        vmaMapMemory(vmaAllocator, uniformDataMemory, &uniformDataMapped);
-    }
-
     void initPipelineLayout() {
         vk::DescriptorSetLayoutBinding descriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex);
         descriptorSetLayout = device.createDescriptorSetLayout({{}, descriptorSetLayoutBinding});
@@ -413,7 +446,7 @@ private:
         vk::DescriptorSetAllocateInfo descriptorSetAllocateInfo(descriptorPool, descriptorSetLayout);
         descriptorSets = device.allocateDescriptorSets(descriptorSetAllocateInfo);
 
-        vk::DescriptorBufferInfo descriptorBufferInfo(uniformDataBuffer, 0, uniformBufferSize);
+        vk::DescriptorBufferInfo descriptorBufferInfo(uniformBuffer.buffer, 0, uniformBufferSize);
         vk::WriteDescriptorSet writeDescriptorSet(descriptorSets.front(), 0, 0, vk::DescriptorType::eUniformBuffer, {}, descriptorBufferInfo);
         device.updateDescriptorSets(writeDescriptorSet, nullptr);
     }
@@ -448,16 +481,6 @@ private:
             attachments[0] = imageView;
             framebuffers.push_back(device.createFramebuffer(framebufferCreateInfo));
         }
-    }
-
-    void initVertexBuffer(vk::DeviceSize bufferSize, const void* bufferData) {
-        std::tie(vertexBuffer, vertexMemory) = createBuffer(bufferSize, vk::BufferUsageFlagBits::eVertexBuffer,
-            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
-
-        void* pData;
-        vmaMapMemory(vmaAllocator, vertexMemory, &pData);
-        memcpy(pData, bufferData, bufferSize);
-        vmaUnmapMemory(vmaAllocator, vertexMemory);
     }
 
     void initPipeline(
@@ -572,15 +595,6 @@ private:
         return {image, imageMemory};
     }
 
-    vk::ShaderModule createShaderModule(vk::ShaderStageFlagBits shaderStage, const std::string& shaderText) {
-        std::vector<unsigned int> shaderSPV;
-        if (!GLSLtoSPV(shaderStage, shaderText, shaderSPV)) {
-            throw std::runtime_error("Could not covert glsl shader to SPIRV");
-        }
-
-        return device.createShaderModule({{}, shaderSPV});
-    }
-
 private:
     vk::ApplicationInfo applicationInfo;
     vk::InstanceCreateInfo instanceCreateInfo;
@@ -610,13 +624,10 @@ private:
     vk::Image depthImage;
     VmaAllocation depthMemory;
     vk::ImageView depthImageView;
-    vk::Buffer uniformDataBuffer;
-    VmaAllocation uniformDataMemory;
-    void* uniformDataMapped;
+    Buffer uniformBuffer;
     vk::RenderPass renderPass;
     std::vector<vk::Framebuffer> framebuffers;
-    vk::Buffer vertexBuffer;
-    VmaAllocation vertexMemory;
+    Buffer vertexBuffer;
     vk::Pipeline graphicsPipeline;
     vk::Semaphore imageAcquiredSemaphore;
     vk::Fence drawFence;

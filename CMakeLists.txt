@@ -9,7 +9,7 @@ find_package(VulkanHeaders CONFIG)
 find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 
 
-add_executable(vulkan-engine main.cc vulkan.cc player.cc)
+add_executable(vulkan-engine main.cc vulkan.cc player.cc shader.cc)
 target_link_libraries(vulkan-engine PRIVATE glfw)
 target_link_libraries(vulkan-engine PRIVATE glm::glm)
 target_link_libraries(vulkan-engine PRIVATE glslang::SPIRV glslang::glslang-default-resource-limits)

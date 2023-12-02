@@ -218,20 +218,3 @@ inline glm::mat4x4 createModelViewProjectionMatrix(vk::Extent2D const & extent)
 
   return result;
 }
-
-
-inline std::vector<char> readFile(const std::string& filename) {
-    std::ifstream file(filename, std::ios::binary | std::ios::ate);
-    if (!file.is_open()) {
-        throw std::runtime_error("Failed to open a file!");
-    }
-
-    auto fileSize = file.tellg();
-    std::vector<char> fileBuffer(fileSize);
-
-    file.seekg(std::ios::beg);
-    file.read(fileBuffer.data(), fileSize);
-    file.close();
-
-    return fileBuffer;
-}

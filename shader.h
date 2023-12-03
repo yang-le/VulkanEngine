@@ -13,14 +13,9 @@ struct Engine;
 
 struct Shader {
     Shader(Engine* engine);
-    ~Shader() {
-        vulkan->destroyVertexBuffer(vertex);
-        for (auto& uniform : uniforms)
-            vulkan->destroyUniformBuffer(uniform.second);
-        vulkan->destroyShaderModule(frag_shader);
-        vulkan->destroyShaderModule(vert_shader);
-    }
+    ~Shader();
 
+    void update();
     void load(const std::string& shader_name);
 
     template<typename T>
@@ -35,13 +30,6 @@ struct Shader {
     template<typename T, size_t Size>
     void write(const T (&data)[Size]) {
         vertex = vulkan->createVertexBuffer(data);
-    }
-
-    void update() {
-        auto mvp = player->proj * player->view;
-        mvp[1][1] *= -1;
-
-        write("mvp", mvp);
     }
 
     Vulkan::Buffer vertex;

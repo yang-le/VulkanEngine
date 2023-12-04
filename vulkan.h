@@ -60,7 +60,7 @@ public:
         buffer.stride = sizeof(T);
         buffer.size = sizeof(T) * Size;
 
-        std::tie(buffer.buffer, buffer.memory) = createBuffer(buffer.size, vk::BufferUsageFlagBits::eUniformBuffer,
+        std::tie(buffer.buffer, buffer.memory) = createBuffer(buffer.size, vk::BufferUsageFlagBits::eVertexBuffer,
             vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 
         vmaMapMemory(vmaAllocator, buffer.memory, &buffer.data);

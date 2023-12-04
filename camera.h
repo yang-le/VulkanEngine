@@ -25,7 +25,7 @@ struct Camera {
     }
 
     void rotate_pitch(float delta_y) {
-        pitch += delta_y;
+        pitch -= delta_y;
         pitch = glm::clamp(pitch, -PITCH_MAX, PITCH_MAX);
     }
 

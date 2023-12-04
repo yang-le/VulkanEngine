@@ -10,7 +10,7 @@ struct WaterMesh : Shader {
     virtual void init() override;
 
     struct Vertex {
-        uint8_t u, v;
-        uint8_t x, y, z;
+        float x, y, z;
+        float u, v;
     };
 };

@@ -180,6 +180,7 @@ void Vulkan::draw() {
     vk::PipelineStageFlags waitDestinationStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput);
     graphicsQueue.submit(vk::SubmitInfo(imageAcquiredSemaphore, waitDestinationStageMask, commandBuffers[0]), drawFence);
     device.waitForFences(drawFence, vk::True, std::numeric_limits<uint64_t>::max());
+    device.resetFences(drawFence);
 
     auto result = presentationQueue.presentKHR({{}, swapChain, currentBuffer.value});
     switch (result) {
@@ -252,7 +253,7 @@ Vulkan::Texture Vulkan::createTexture(vk::Extent2D extent, const void* data, boo
     device.destroyFence(fence);
 
     vk::SamplerCreateInfo samplerCreateInfo({}, vk::Filter::eNearest, vk::Filter::eNearest, vk::SamplerMipmapMode::eNearest,
-        vk::SamplerAddressMode::eClampToEdge, vk::SamplerAddressMode::eClampToEdge, vk::SamplerAddressMode::eClampToEdge,
+        vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat,
         0.0f, anisotropy, 16.0f, false, vk::CompareOp::eNever, 0.0f, 0.0f, vk::BorderColor::eFloatOpaqueBlack);
     texture.sampler = device.createSampler(samplerCreateInfo);
 
@@ -332,15 +333,18 @@ void Vulkan::initDevice(std::function<vk::SurfaceKHR(const vk::Instance &)> getS
     if (presentationQueueFamliyIndex >= queueFamilyProperties.size())
         throw std::runtime_error("Cannot get presentation queue!");
 
+    float queuePriority = 0.0f;
     if (graphicsQueueFamliyIndex == presentationQueueFamliyIndex) {
-        vk::DeviceQueueCreateInfo deviceQueueCreateInfo({}, graphicsQueueFamliyIndex, 1);
+        vk::DeviceQueueCreateInfo deviceQueueCreateInfo({}, graphicsQueueFamliyIndex, 1, &queuePriority);
         deviceCreateInfo.setQueueCreateInfos(deviceQueueCreateInfo);
     } else {
         vk::DeviceQueueCreateInfo deviceQueueCreateInfos[2];
         deviceQueueCreateInfos[0].setQueueCount(1);
         deviceQueueCreateInfos[0].setQueueFamilyIndex(graphicsQueueFamliyIndex);
+        deviceQueueCreateInfos[0].setPQueuePriorities(&queuePriority);
         deviceQueueCreateInfos[1].setQueueCount(1);
         deviceQueueCreateInfos[1].setQueueFamilyIndex(presentationQueueFamliyIndex);
+        deviceQueueCreateInfos[1].setPQueuePriorities(&queuePriority);
         deviceCreateInfo.setQueueCreateInfos(deviceQueueCreateInfos);
     }
 
@@ -370,16 +374,12 @@ void Vulkan::initDevice(std::function<vk::SurfaceKHR(const vk::Instance &)> getS
 }
 
 void Vulkan::initCommandBuffer() {
-    commandPool = device.createCommandPool({{}, graphicsQueueFamliyIndex});
+    commandPool = device.createCommandPool({vk::CommandPoolCreateFlagBits::eResetCommandBuffer, graphicsQueueFamliyIndex});
     commandBuffers = device.allocateCommandBuffers({commandPool, vk::CommandBufferLevel::ePrimary, 1});
 }
 
 void Vulkan::initSwapChain(vk::Extent2D extent) {
-    auto formats = physicalDevice.getSurfaceFormatsKHR(surface);
-    if (formats.empty())
-        throw std::runtime_error("No supported surface format!");
-
-    vk::Format format = formats[0].format == vk::Format::eUndefined ? vk::Format::eR8G8B8A8Unorm : formats[0].format;
+    vk::SurfaceFormatKHR surfaceFormat = pickSurfaceFormat(physicalDevice.getSurfaceFormatsKHR(surface));
 
     auto surfaceCaps = physicalDevice.getSurfaceCapabilitiesKHR(surface);
 
@@ -406,7 +406,7 @@ void Vulkan::initSwapChain(vk::Extent2D extent) {
 
     vk::SwapchainCreateInfoKHR swapChainCreateInfo({}, surface,
         clamp(3u, surfaceCaps.minImageCount, surfaceCaps.maxImageCount),
-        format, vk::ColorSpaceKHR::eSrgbNonlinear, imageExtent, 1,
+        surfaceFormat.format, surfaceFormat.colorSpace, imageExtent, 1,
         vk::ImageUsageFlagBits::eColorAttachment, vk::SharingMode::eExclusive, {},
         preTransform, compositeAlpha, presentMode, true
     );
@@ -420,7 +420,7 @@ void Vulkan::initSwapChain(vk::Extent2D extent) {
 
     swapChainImages = device.getSwapchainImagesKHR(swapChain);
     swapChainImageViews.reserve(swapChainImages.size());
-    vk::ImageViewCreateInfo imageViewCreateInfo({}, {}, vk::ImageViewType::e2D, format, {},
+    vk::ImageViewCreateInfo imageViewCreateInfo({}, {}, vk::ImageViewType::e2D, surfaceFormat.format, {},
         {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1});
     for (auto image : swapChainImages) {
         imageViewCreateInfo.image = image;
@@ -481,7 +481,7 @@ void Vulkan::initDescriptorSet() {
 
     uint32_t binding0 = 0;
     for (const auto& buffer : uniformBuffer) {
-        descriptorBufferInfo.emplace_back(buffer.buffer, 0, vk::WholeSize);
+        descriptorBufferInfo.emplace_back(buffer.buffer, 0, buffer.size);
         writeDescriptorSet.emplace_back(descriptorSets[0], binding0++, 0, 1, vk::DescriptorType::eUniformBuffer, nullptr, &descriptorBufferInfo.back());
     }
 
@@ -508,7 +508,7 @@ void Vulkan::initRenderPass() {
         vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthStencilAttachmentOptimal);
 
     vk::AttachmentReference colorReference(0, vk::ImageLayout::eColorAttachmentOptimal);
-    vk::AttachmentReference depthReference(1, vk::ImageLayout::eDepthAttachmentStencilReadOnlyOptimal);
+    vk::AttachmentReference depthReference(1, vk::ImageLayout::eDepthStencilAttachmentOptimal);
     vk::SubpassDescription subpass({}, vk::PipelineBindPoint::eGraphics, {}, colorReference, {}, &depthReference);
 
     renderPass = device.createRenderPass({{}, attachmentDescriptions, subpass});
@@ -551,8 +551,13 @@ void Vulkan::initPipeline(
     }
 
     vk::PipelineInputAssemblyStateCreateInfo pipelineInputAssemblyStateCreateInfo({}, vk::PrimitiveTopology::eTriangleList);
+
+    vk::Viewport viewport(0, 0, imageExtent.width, imageExtent.height, 0, 1);
+    vk::Rect2D scissor({0, 0}, imageExtent);
+    vk::PipelineViewportStateCreateInfo pipelineViewportStateCreateInfo({}, viewport, scissor);
+
     vk::PipelineRasterizationStateCreateInfo pipelineRasterizationStateCreateInfo({}, false, false,
-        vk::PolygonMode::eFill, vk::CullModeFlagBits::eBack, vk::FrontFace::eClockwise,
+        vk::PolygonMode::eFill, vk::CullModeFlagBits::eBack, vk::FrontFace::eCounterClockwise,
         false, 0.0f, 0.0f, 0.0f, 1.0f);
     vk::PipelineMultisampleStateCreateInfo pipelineMultisampleStateCreateInfo({}, vk::SampleCountFlagBits::e1);
     vk::PipelineDepthStencilStateCreateInfo pipelineDepthStencilStateCreateInfo({}, depthBuffered, depthBuffered, vk::CompareOp::eLessOrEqual);
@@ -567,7 +572,8 @@ void Vulkan::initPipeline(
         pipelineShaderStageCreateInfos,
         &pipelineVertexInputeStateCreateInfo,
         &pipelineInputAssemblyStateCreateInfo,
-        nullptr, nullptr,
+        nullptr,
+        &pipelineViewportStateCreateInfo,
         &pipelineRasterizationStateCreateInfo,
         &pipelineMultisampleStateCreateInfo,
         &pipelineDepthStencilStateCreateInfo,

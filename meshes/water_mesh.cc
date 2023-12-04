@@ -10,8 +10,8 @@ WaterMesh::WaterMesh(Engine* engine)
     : Shader(engine)
 {
     vert_format = {
-        {vk::Format::eR8G8Uint, 0},
-        {vk::Format::eR8G8B8Uint, 2}
+        {vk::Format::eR32G32B32Sfloat, 0},
+        {vk::Format::eR32G32Sfloat, 12},
     };
 }
 
@@ -20,11 +20,11 @@ void WaterMesh::init() {
 
     Vertex data[] = {
         {0, 0, 0, 0, 0},
-        {1, 1, 1, 0, 1},
-        {1, 0, 1, 0, 0},
+        {1, 0, 1, 1, 1},
+        {1, 0, 0, 1, 0},
         {0, 0, 0, 0, 0},
-        {0, 1, 0, 0, 1},
-        {1, 1, 1, 0, 1}
+        {0, 0, 1, 0, 1},
+        {1, 0, 1, 1, 1}
     };
     write(data);
 

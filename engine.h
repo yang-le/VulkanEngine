@@ -6,7 +6,7 @@
 #include <GLFW/glfw3.h>
 
 #include "player.h"
-#include "shader.h"
+#include "meshes/water_mesh.h"
 #include "settings.h"
 
 
@@ -20,7 +20,7 @@ struct Engine {
     void handle_events();
 
     Vulkan vulkan;
-    Shader shader;
+    WaterMesh water_mesh;
     GLFWwindow* window;
     Player player;
     float frame_count = 0, fps = 0;

@@ -9,7 +9,12 @@ find_package(VulkanHeaders CONFIG)
 find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 
 
-add_executable(vulkan-engine main.cc vulkan.cc engine.cc player.cc shader.cc)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+add_executable(vulkan-engine
+    main.cc vulkan.cc engine.cc player.cc shader.cc
+    meshes/water_mesh.cc
+)
+
 target_link_libraries(vulkan-engine PRIVATE glfw)
 target_link_libraries(vulkan-engine PRIVATE glm::glm)
 target_link_libraries(vulkan-engine PRIVATE glslang::SPIRV glslang::glslang-default-resource-limits)

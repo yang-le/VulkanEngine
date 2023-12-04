@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdint.h>
 #include <string>
 #include <map>
 #include <fstream>
@@ -15,7 +16,8 @@ struct Shader {
     Shader(Engine* engine);
     ~Shader();
 
-    void update();
+    virtual void init();
+    virtual void update();
     void load(const std::string& shader_name);
 
     template<typename T>
@@ -32,9 +34,17 @@ struct Shader {
         vertex = vulkan->createVertexBuffer(data);
     }
 
+    template<size_t Size>
+    void write(const std::string& name, const char (&filename)[Size]) {
+        write(name, std::string(filename));
+    }
+
+    void write(const std::string& name, const std::string& filename);
+
     Vulkan::Buffer vertex;
     std::vector<std::pair<vk::Format, uint32_t>> vert_format;
     std::map<std::string, Vulkan::Buffer> uniforms;
+    std::map<std::string, Vulkan::Texture> textures;
     vk::ShaderModule vert_shader = {};
     vk::ShaderModule frag_shader = {};
 

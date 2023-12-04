@@ -2,10 +2,11 @@
 
 // TODO: to be deleted
 #include "utils.h"
+#include <vector>
 
 
 Engine::Engine()
-    : player(this), shader(this)
+    : player(this), water_mesh(this)
 {
     glfwInit();
 
@@ -19,20 +20,26 @@ Engine::Engine()
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     window = glfwCreateWindow(WIN_WIDTH, WIN_HEIGHT, "VulkanEngine", nullptr, nullptr);
 
-    vulkan.init(WIN_WIDTH, WIN_HEIGHT, [this](const vk::Instance& instance) {
+    vulkan.init({WIN_WIDTH, WIN_HEIGHT}, [this](const vk::Instance& instance) {
         VkSurfaceKHR surfaceKHR = VK_NULL_HANDLE;
         glfwCreateWindowSurface(instance, window, nullptr, &surfaceKHR);
         return surfaceKHR;
     });
 
+    water_mesh.init();
+
     glslang::InitializeProcess();
-    shader.load("cube");
+    water_mesh.load("water");
     glslang::FinalizeProcess();
 
-    shader.write(coloredCubeData);
-    shader.write("mvp", glm::mat4(1));
-    shader.vert_format = {{vk::Format::eR32G32B32A32Sfloat, 0}, {vk::Format::eR32G32B32A32Sfloat, 16}};
-    vulkan.attachShader(shader.vert_shader, shader.frag_shader, shader.vertex, shader.uniforms.begin()->second, shader.vert_format);
+    std::vector<Vulkan::Buffer> uniforms;
+    std::vector<Vulkan::Texture> textures;
+    for (auto& it : water_mesh.uniforms)
+        uniforms.push_back(it.second);
+    for (auto& it : water_mesh.textures)
+        textures.push_back(it.second);
+
+    vulkan.attachShader(water_mesh.vert_shader, water_mesh.frag_shader, water_mesh.vertex, water_mesh.vert_format, uniforms, textures);
 
     glfwSetWindowUserPointer(window, this);
     glfwSetMouseButtonCallback(window, [](GLFWwindow* window, int button, int action, int mods) {
@@ -89,7 +96,7 @@ void Engine::run() {
 
 void Engine::update() {
     player.update();
-    shader.update();
+    water_mesh.update();
 
     auto prev_t = std::exchange(t, glfwGetTime());
     dt = t - prev_t;

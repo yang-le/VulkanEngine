@@ -68,12 +68,13 @@ namespace {
 
 Vulkan::~Vulkan() {
     device.waitIdle();
+
+    destroySwapChain();
+    vmaDestroyAllocator(vmaAllocator);
+
     device.destroyFence(drawFence);
     device.destroySemaphore(imageAcquiredSemaphore);
     device.destroyPipeline(graphicsPipeline);
-    for(auto const& framebuffer : framebuffers)
-        device.destroyFramebuffer(framebuffer);
-
     device.destroyRenderPass(renderPass);
     device.destroyPipelineLayout(pipelineLayout);
     device.freeDescriptorSets(descriptorPool[0], descriptorSets[0]);
@@ -82,15 +83,7 @@ Vulkan::~Vulkan() {
     device.freeDescriptorSets(descriptorPool[1], descriptorSets[1]);
     device.destroyDescriptorPool(descriptorPool[1]);
     device.destroyDescriptorSetLayout(descriptorSetLayout[1]);
-
-    device.destroyImageView(depthImageView);
-    vmaDestroyImage(vmaAllocator, depthImage, depthMemory);
-    vmaDestroyAllocator(vmaAllocator);
-
-    for (auto& swapChainImageView : swapChainImageViews)
-        device.destroyImageView(swapChainImageView);
-    device.destroySwapchainKHR(swapChain);
-    device.freeCommandBuffers(commandPool, commandBuffers);
+    device.freeCommandBuffers(commandPool, commandBuffer);
     device.destroyCommandPool(commandPool);
     device.destroy();
 
@@ -149,7 +142,7 @@ void Vulkan::init(vk::Extent2D extent, std::function<vk::SurfaceKHR(const vk::In
 
 void Vulkan::attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule, const Buffer& vertex, const std::vector<std::pair<vk::Format, uint32_t>>& vertexInputeAttributeFormatOffset, const std::vector<Buffer>& uniforms, const std::vector<Texture>& textures) {
     vertexBuffer = vertex;
-    uniformBuffer = uniforms;
+    uniformBuffers = uniforms;
     this->textures = textures;
 
     initPipelineLayout();
@@ -159,7 +152,12 @@ void Vulkan::attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule 
 
 void Vulkan::draw() {
     auto currentBuffer = device.acquireNextImageKHR(swapChain, std::numeric_limits<uint64_t>::max(), imageAcquiredSemaphore);
-    assert(currentBuffer.result == vk::Result::eSuccess);
+    if (currentBuffer.result == vk::Result::eErrorOutOfDateKHR) {
+        throw std::runtime_error("resize");
+    }
+    else if (currentBuffer.result != vk::Result::eSuccess && currentBuffer.result != vk::Result::eSuboptimalKHR) {
+        throw std::runtime_error("fail to acquire swap chain image!");
+    }
     assert(currentBuffer.value < framebuffers.size());
 
     std::array<vk::ClearValue, 2> clearValues;
@@ -168,26 +166,37 @@ void Vulkan::draw() {
 
     vk::RenderPassBeginInfo renderPassBeginInfo(renderPass, framebuffers[currentBuffer.value], vk::Rect2D(vk::Offset2D(0, 0), imageExtent), clearValues);
 
-    commandBuffers[0].begin(vk::CommandBufferBeginInfo());
-    commandBuffers[0].beginRenderPass(renderPassBeginInfo, vk::SubpassContents::eInline);
-    commandBuffers[0].bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipeline);
-    commandBuffers[0].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout, 0, descriptorSets, nullptr);
-    commandBuffers[0].bindVertexBuffers(0, vertexBuffer.buffer, {0});
-    commandBuffers[0].draw(vertexBuffer.size / vertexBuffer.stride, 1, 0, 0);
-    commandBuffers[0].endRenderPass();
-    commandBuffers[0].end();
+    commandBuffer.begin(vk::CommandBufferBeginInfo());
+    commandBuffer.beginRenderPass(renderPassBeginInfo, vk::SubpassContents::eInline);
+    commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipeline);
+    commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout, 0, descriptorSets, nullptr);
+    commandBuffer.bindVertexBuffers(0, vertexBuffer.buffer, {0});
+    commandBuffer.setViewport(0, vk::Viewport(0, 0, imageExtent.width, imageExtent.height, 0, 1));
+    commandBuffer.setScissor(0, vk::Rect2D({0, 0}, imageExtent));
+    commandBuffer.draw(vertexBuffer.size / vertexBuffer.stride, 1, 0, 0);
+    commandBuffer.endRenderPass();
+    commandBuffer.end();
 
     vk::PipelineStageFlags waitDestinationStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput);
-    graphicsQueue.submit(vk::SubmitInfo(imageAcquiredSemaphore, waitDestinationStageMask, commandBuffers[0]), drawFence);
+    graphicsQueue.submit(vk::SubmitInfo(imageAcquiredSemaphore, waitDestinationStageMask, commandBuffer), drawFence);
     device.waitForFences(drawFence, vk::True, std::numeric_limits<uint64_t>::max());
     device.resetFences(drawFence);
 
     auto result = presentationQueue.presentKHR({{}, swapChain, currentBuffer.value});
-    switch (result) {
-    case vk::Result::eSuccess: break;
-    case vk::Result::eSuboptimalKHR: puts("vk::Queue::presentKHR returned vk::Result::eSuboptimalKHR"); break;
-    default: assert(false);
+    if (result == vk::Result::eErrorOutOfDateKHR || result == vk::Result::eSuboptimalKHR) {
+        throw std::runtime_error("resize");
     }
+    else if (result != vk::Result::eSuccess) {
+        throw std::runtime_error("failed to present swap chain image!");
+    }
+}
+
+void Vulkan::resize(vk::Extent2D extent) {
+    device.waitIdle();
+    destroySwapChain();
+    initSwapChain(extent);
+    initDepthBuffer();
+    initFrameBuffers();
 }
 
 Vulkan::Buffer Vulkan::createUniformBuffer(vk::DeviceSize size) {
@@ -233,22 +242,22 @@ Vulkan::Texture Vulkan::createTexture(vk::Extent2D extent, const void* data, boo
     memcpy(textureData, data, extent.width * extent.height * 4);
     vmaUnmapMemory(vmaAllocator, needStaging ? texture.stagingMemory : texture.memory);
 
-    commandBuffers[0].begin(vk::CommandBufferBeginInfo());
+    commandBuffer.begin(vk::CommandBufferBeginInfo());
     if (needStaging) {
-        setImageLayout(commandBuffers[0], texture.image, format, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
+        setImageLayout(commandBuffer, texture.image, format, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
         vk::BufferImageCopy copyRegion(0, extent.width, extent.height,
             {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
             vk::Offset3D(0, 0, 0), vk::Extent3D(extent, 1));
-        commandBuffers[0].copyBufferToImage(texture.stagingBuffer, texture.image, vk::ImageLayout::eTransferDstOptimal, copyRegion);
-        setImageLayout(commandBuffers[0], texture.image, format, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
+        commandBuffer.copyBufferToImage(texture.stagingBuffer, texture.image, vk::ImageLayout::eTransferDstOptimal, copyRegion);
+        setImageLayout(commandBuffer, texture.image, format, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
     }
     else {
-        setImageLayout(commandBuffers[0], texture.image, format, vk::ImageLayout::ePreinitialized, vk::ImageLayout::eShaderReadOnlyOptimal);
+        setImageLayout(commandBuffer, texture.image, format, vk::ImageLayout::ePreinitialized, vk::ImageLayout::eShaderReadOnlyOptimal);
     }
-    commandBuffers[0].end();
+    commandBuffer.end();
 
     vk::Fence fence = device.createFence({});
-    graphicsQueue.submit(vk::SubmitInfo({}, {}, commandBuffers[0]), fence);
+    graphicsQueue.submit(vk::SubmitInfo({}, {}, commandBuffer), fence);
     device.waitForFences(fence, vk::True, std::numeric_limits<uint64_t>::max());
     device.destroyFence(fence);
 
@@ -375,7 +384,8 @@ void Vulkan::initDevice(std::function<vk::SurfaceKHR(const vk::Instance &)> getS
 
 void Vulkan::initCommandBuffer() {
     commandPool = device.createCommandPool({vk::CommandPoolCreateFlagBits::eResetCommandBuffer, graphicsQueueFamliyIndex});
-    commandBuffers = device.allocateCommandBuffers({commandPool, vk::CommandBufferLevel::ePrimary, 1});
+    vk::CommandBufferAllocateInfo commandBufferAllocateInfo(commandPool, vk::CommandBufferLevel::ePrimary, 1);
+    device.allocateCommandBuffers(&commandBufferAllocateInfo, &commandBuffer);
 }
 
 void Vulkan::initSwapChain(vk::Extent2D extent) {
@@ -446,7 +456,7 @@ void Vulkan::initDepthBuffer() {
 }
 
 void Vulkan::initPipelineLayout() {
-    std::vector<vk::DescriptorSetLayoutBinding> descriptorSetLayoutBinding0(uniformBuffer.size());
+    std::vector<vk::DescriptorSetLayoutBinding> descriptorSetLayoutBinding0(uniformBuffers.size());
     for (uint32_t i = 0; i < descriptorSetLayoutBinding0.size(); ++i)
         descriptorSetLayoutBinding0[i] = {i, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex};
     descriptorSetLayout[0] = device.createDescriptorSetLayout({{}, descriptorSetLayoutBinding0});
@@ -460,7 +470,7 @@ void Vulkan::initPipelineLayout() {
 }
 
 void Vulkan::initDescriptorSet() {
-    std::vector<vk::DescriptorPoolSize> poolSize0(uniformBuffer.size(), {vk::DescriptorType::eUniformBuffer, 1});
+    std::vector<vk::DescriptorPoolSize> poolSize0(uniformBuffers.size(), {vk::DescriptorType::eUniformBuffer, 1});
     descriptorPool[0] = device.createDescriptorPool({{}, 1, poolSize0});
 
     vk::DescriptorSetAllocateInfo descriptorSetAllocateInfo0(descriptorPool[0], 1, &descriptorSetLayout[0]);
@@ -473,14 +483,14 @@ void Vulkan::initDescriptorSet() {
     device.allocateDescriptorSets(&descriptorSetAllocateInfo1, &descriptorSets[1]);
 
     std::vector<vk::DescriptorBufferInfo> descriptorBufferInfo;
-    descriptorBufferInfo.reserve(uniformBuffer.size());
+    descriptorBufferInfo.reserve(uniformBuffers.size());
     std::vector<vk::DescriptorImageInfo> descriptorImageInfo;
     descriptorImageInfo.reserve(textures.size());
     std::vector<vk::WriteDescriptorSet> writeDescriptorSet;
-    writeDescriptorSet.reserve(uniformBuffer.size());
+    writeDescriptorSet.reserve(uniformBuffers.size());
 
     uint32_t binding0 = 0;
-    for (const auto& buffer : uniformBuffer) {
+    for (const auto& buffer : uniformBuffers) {
         descriptorBufferInfo.emplace_back(buffer.buffer, 0, buffer.size);
         writeDescriptorSet.emplace_back(descriptorSets[0], binding0++, 0, 1, vk::DescriptorType::eUniformBuffer, nullptr, &descriptorBufferInfo.back());
     }
@@ -568,6 +578,9 @@ void Vulkan::initPipeline(
         vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA);
     vk::PipelineColorBlendStateCreateInfo pipelineColorBlendStateCreateInfo({}, false, vk::LogicOp::eNoOp, pipelineColorBlendAttachmentState);
 
+    std::array<vk::DynamicState, 2> dynamicStates = {vk::DynamicState::eViewport, vk::DynamicState::eScissor};
+    vk::PipelineDynamicStateCreateInfo pipelineDynamicStateCreateInfo({}, dynamicStates);
+
     vk::GraphicsPipelineCreateInfo graphicPipelineCreateInfo({},
         pipelineShaderStageCreateInfos,
         &pipelineVertexInputeStateCreateInfo,
@@ -578,7 +591,7 @@ void Vulkan::initPipeline(
         &pipelineMultisampleStateCreateInfo,
         &pipelineDepthStencilStateCreateInfo,
         &pipelineColorBlendStateCreateInfo,
-        nullptr,
+        &pipelineDynamicStateCreateInfo,
         pipelineLayout,
         renderPass
         );
@@ -586,6 +599,19 @@ void Vulkan::initPipeline(
     vk::Result result;
     std::tie(result, graphicsPipeline) = device.createGraphicsPipeline(nullptr, graphicPipelineCreateInfo);
     assert(result == vk::Result::eSuccess);
+}
+
+void Vulkan::destroySwapChain() {
+    for(auto const& framebuffer : framebuffers)
+        device.destroyFramebuffer(framebuffer);
+    framebuffers.clear();
+    for (auto& swapChainImageView : swapChainImageViews)
+        device.destroyImageView(swapChainImageView);
+    swapChainImageViews.clear();
+    device.destroySwapchainKHR(swapChain);
+
+    device.destroyImageView(depthImageView);
+    vmaDestroyImage(vmaAllocator, depthImage, depthMemory);
 }
 
 

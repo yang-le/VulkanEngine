@@ -1,7 +1,6 @@
 #pragma once
 
 #include <functional>
-#include <vector>
 
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>
@@ -50,6 +49,7 @@ public:
     void init(vk::Extent2D extent, std::function<vk::SurfaceKHR(const vk::Instance &)> getSurfaceKHR, std::function<bool(const vk::PhysicalDevice &)> pickDevice = {});
     void attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule, const Buffer& vertex, const std::vector<std::pair<vk::Format, uint32_t>>& vertexInputeAttributeFormatOffset, const std::vector<Buffer>& uniforms, const std::vector<Texture>& textures);
     void draw();
+    void resize(vk::Extent2D extent);
 
     Buffer createUniformBuffer(vk::DeviceSize size);
     void destroyUniformBuffer(const Buffer& buffer);
@@ -89,7 +89,7 @@ private:
     void initRenderPass();
     void initFrameBuffers();
     void initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule, uint32_t vertexStride, const std::vector<std::pair<vk::Format, uint32_t>>& vertexInputeAttributeFormatOffset, bool depthBuffered = true);
-
+    void destroySwapChain();
 
     //
     // Utils
@@ -117,7 +117,7 @@ private:
     #define computeQueue graphicsQueue
     VmaAllocator vmaAllocator;
     vk::CommandPool commandPool;
-    std::vector<vk::CommandBuffer> commandBuffers;
+    vk::CommandBuffer commandBuffer;
     vk::Extent2D imageExtent;
     vk::SwapchainKHR swapChain;
     std::vector<vk::Image> swapChainImages;
@@ -130,7 +130,7 @@ private:
     VmaAllocation depthMemory;
     vk::ImageView depthImageView;
     Buffer vertexBuffer;
-    std::vector<Buffer> uniformBuffer;
+    std::vector<Buffer> uniformBuffers;
     std::vector<Texture> textures;
     std::vector<vk::Framebuffer> framebuffers;
     vk::RenderPass renderPass;

@@ -1,9 +1,5 @@
 #include "engine.h"
 
-// TODO: to be deleted
-#include "utils.h"
-#include <vector>
-
 
 Engine::Engine()
     : player(this), water_mesh(this)
@@ -108,7 +104,22 @@ void Engine::update() {
 }
 
 void Engine::render() {
-    vulkan.draw();
+    try {
+        vulkan.draw();
+    } catch (std::runtime_error e) {
+        if (!strcmp(e.what(), "resize")) {
+            int width = 0, height = 0;
+            glfwGetFramebufferSize(window, &width, &height);
+            while(width == 0 || height == 0) {
+                glfwGetFramebufferSize(window, &width, &height);
+                glfwWaitEvents();
+            }
+            vulkan.resize({(uint32_t)width, (uint32_t)height});
+        }
+        else {
+            puts(e.what());
+        }
+    };
     ++frame_count;
 }
 

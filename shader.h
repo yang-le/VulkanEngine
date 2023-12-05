@@ -1,10 +1,5 @@
 #pragma once
 
-#include <stdint.h>
-#include <string>
-#include <map>
-#include <fstream>
-
 #include "vulkan.h"
 #include "player.h"
 #include "settings.h"

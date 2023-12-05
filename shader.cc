@@ -1,9 +1,10 @@
+#include <fstream>
+
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
 #include "shader.h"
 #include "engine.h"
-#include <stdint.h>
 
 
 namespace {
@@ -66,5 +67,6 @@ void Shader::write(const std::string& name, const std::string& filename) {
             throw std::runtime_error("Failed to load a Texture file! (" + filename + ")");
 
         texture = vulkan->createTexture({(uint32_t)width, (uint32_t)height}, image);
+        stbi_image_free(image);
     }
 }

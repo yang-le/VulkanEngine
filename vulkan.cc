@@ -95,10 +95,8 @@ Vulkan::~Vulkan() {
     device.destroyPipeline(graphicsPipeline);
     device.destroyRenderPass(renderPass);
     device.destroyPipelineLayout(pipelineLayout);
-    device.freeDescriptorSets(descriptorPool[0], descriptorSets[0]);
     device.destroyDescriptorPool(descriptorPool[0]);
     device.destroyDescriptorSetLayout(descriptorSetLayout[0]);
-    device.freeDescriptorSets(descriptorPool[1], descriptorSets[1]);
     device.destroyDescriptorPool(descriptorPool[1]);
     device.destroyDescriptorSetLayout(descriptorSetLayout[1]);
     device.freeCommandBuffers(commandPool, commandBuffer);
@@ -392,14 +390,13 @@ void Vulkan::initDevice(std::function<vk::SurfaceKHR(const vk::Instance&)> getSu
         throw std::runtime_error("Cannot get presentation queue!");
 
     float queuePriority = 0.0f;
+    vk::DeviceQueueCreateInfo deviceQueueCreateInfos[2];
+    deviceQueueCreateInfos[0].setQueueCount(1);
+    deviceQueueCreateInfos[0].setQueueFamilyIndex(graphicsQueueFamliyIndex);
+    deviceQueueCreateInfos[0].setPQueuePriorities(&queuePriority);
     if (graphicsQueueFamliyIndex == presentationQueueFamliyIndex) {
-        vk::DeviceQueueCreateInfo deviceQueueCreateInfo({}, graphicsQueueFamliyIndex, 1, &queuePriority);
-        deviceCreateInfo.setQueueCreateInfos(deviceQueueCreateInfo);
+        deviceCreateInfo.setQueueCreateInfos(deviceQueueCreateInfos[0]);
     } else {
-        vk::DeviceQueueCreateInfo deviceQueueCreateInfos[2];
-        deviceQueueCreateInfos[0].setQueueCount(1);
-        deviceQueueCreateInfos[0].setQueueFamilyIndex(graphicsQueueFamliyIndex);
-        deviceQueueCreateInfos[0].setPQueuePriorities(&queuePriority);
         deviceQueueCreateInfos[1].setQueueCount(1);
         deviceQueueCreateInfos[1].setQueueFamilyIndex(presentationQueueFamliyIndex);
         deviceQueueCreateInfos[1].setPQueuePriorities(&queuePriority);
@@ -474,9 +471,10 @@ void Vulkan::initSwapChain(vk::Extent2D extent) {
         {}, surface, clamp(3u, surfaceCaps.minImageCount, surfaceCaps.maxImageCount), surfaceFormat.format,
         surfaceFormat.colorSpace, imageExtent, 1, vk::ImageUsageFlagBits::eColorAttachment, vk::SharingMode::eExclusive,
         {}, preTransform, compositeAlpha, presentMode, true);
+
+    auto queueFamilyIndices = {graphicsQueueFamliyIndex, presentationQueueFamliyIndex};
     if (graphicsQueueFamliyIndex != presentationQueueFamliyIndex) {
         swapChainCreateInfo.imageSharingMode = vk::SharingMode::eConcurrent;
-        auto queueFamilyIndices = {graphicsQueueFamliyIndex, presentationQueueFamliyIndex};
         swapChainCreateInfo.setQueueFamilyIndices(queueFamilyIndices);
     }
 

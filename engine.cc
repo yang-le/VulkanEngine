@@ -86,8 +86,8 @@ void Engine::update() {
     auto prev_t = std::exchange(t, glfwGetTime());
     dt = t - prev_t;
 
-    fps = frame_count / dt;
-    frame_count = 0;
+    fps = 1 / dt;
+    glfwSetWindowTitle(window, std::to_string(fps).c_str());
 
     dx = dy = 0;
 }
@@ -108,7 +108,6 @@ void Engine::render() {
             puts(e.what());
         }
     };
-    ++frame_count;
 }
 
 void Engine::handle_events() { player.handle_events(); }

@@ -2,7 +2,6 @@
 
 #include <glm/glm.hpp>
 
-
 // resolution
 constexpr int WIN_WIDTH = 1600;
 constexpr int WIN_HEIGHT = 900;
@@ -33,8 +32,8 @@ constexpr int CENTER_Y = WORLD_H * H_CHUNK_SIZE;
 // camera
 constexpr float ASPECT_RATIO = (float)WIN_WIDTH / WIN_HEIGHT;
 constexpr float FOV_DEG = 50;
-constexpr float V_FOV = glm::radians(FOV_DEG); // vertical FOV
-const     float H_FOV = 2 * glm::atan(glm::tan(V_FOV * 0.5) * ASPECT_RATIO); // horizontal FOV
+constexpr float V_FOV = glm::radians(FOV_DEG);                            // vertical FOV
+const float H_FOV = 2 * glm::atan(glm::tan(V_FOV * 0.5) * ASPECT_RATIO);  // horizontal FOV
 constexpr float NEAR = 0.1;
 constexpr float FAR = 2000.0;
 constexpr float PITCH_MAX = glm::radians(89.0);
@@ -42,7 +41,7 @@ constexpr float PITCH_MAX = glm::radians(89.0);
 // player
 constexpr float PLAYER_SPEED = 0.005;
 constexpr float PLAYER_ROT_SPEED = 0.003;
-constexpr glm::vec3 PLAYER_POS = glm::vec3(CENTER_XZ, WORLD_H * CHUNK_SIZE, CENTER_XZ);
+constexpr glm::vec3 PLAYER_POS = glm::vec3(CENTER_XZ, WORLD_H* CHUNK_SIZE, CENTER_XZ);
 constexpr float MOUSE_SENSITIVITY = 0.002;
 
 // colors

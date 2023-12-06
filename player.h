@@ -2,7 +2,6 @@
 
 #include "camera.h"
 
-
 struct Engine;
 
 struct Player : Camera {

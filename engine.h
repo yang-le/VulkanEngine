@@ -1,14 +1,14 @@
 #pragma once
 
-#include <bitset>
-
-#include "vulkan.h"
+#define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
-#include "player.h"
-#include "meshes/water_mesh.h"
-#include "settings.h"
+#include <bitset>
 
+#include "meshes/water_mesh.h"
+#include "player.h"
+#include "settings.h"
+#include "vulkan.h"
 
 struct Engine {
     Engine();

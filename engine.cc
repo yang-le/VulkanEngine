@@ -1,15 +1,11 @@
 #include "engine.h"
 
-
-Engine::Engine()
-    : player(this), water_mesh(this)
-{
+Engine::Engine() : player(this), water_mesh(this) {
     glfwInit();
 
     uint32_t count;
     const char** extensions = glfwGetRequiredInstanceExtensions(&count);
-    if (!extensions)
-        throw std::runtime_error("GLFW cannot create Vulkan window surfaces!");
+    if (!extensions) throw std::runtime_error("GLFW cannot create Vulkan window surfaces!");
 
     vulkan.setInstanceExtensions({count, extensions});
 
@@ -28,20 +24,14 @@ Engine::Engine()
     water_mesh.load("water");
     glslang::FinalizeProcess();
 
-    std::vector<Vulkan::Buffer> uniforms;
-    std::vector<Vulkan::Texture> textures;
-    for (auto& it : water_mesh.uniforms)
-        uniforms.push_back(it.second);
-    for (auto& it : water_mesh.textures)
-        textures.push_back(it.second);
-
-    vulkan.attachShader(water_mesh.vert_shader, water_mesh.frag_shader, water_mesh.vertex, water_mesh.vert_format, uniforms, textures);
+    vulkan.attachShader(water_mesh.vert_shader, water_mesh.frag_shader, water_mesh.vertex, water_mesh.vert_format,
+                        water_mesh.get_uniforms(), water_mesh.get_textures());
 
     glfwSetWindowUserPointer(window, this);
     glfwSetMouseButtonCallback(window, [](GLFWwindow* window, int button, int action, int mods) {
         if (glfwGetWindowAttrib(window, GLFW_HOVERED) &&
-            glfwGetInputMode(window, GLFW_CURSOR) != GLFW_CURSOR_DISABLED &&
-            button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
+            glfwGetInputMode(window, GLFW_CURSOR) != GLFW_CURSOR_DISABLED && button == GLFW_MOUSE_BUTTON_LEFT &&
+            action == GLFW_PRESS) {
             if (glfwRawMouseMotionSupported()) {
                 glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
                 glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
@@ -55,8 +45,7 @@ Engine::Engine()
 
                     glfwSetKeyCallback(window, nullptr);
                     glfwSetCursorPosCallback(window, nullptr);
-                }
-                else {
+                } else {
                     if (action == GLFW_PRESS)
                         self->key_state.set(key);
                     else if (action == GLFW_RELEASE)
@@ -110,19 +99,16 @@ void Engine::render() {
         if (!strcmp(e.what(), "resize")) {
             int width = 0, height = 0;
             glfwGetFramebufferSize(window, &width, &height);
-            while(width == 0 || height == 0) {
+            while (width == 0 || height == 0) {
                 glfwGetFramebufferSize(window, &width, &height);
                 glfwWaitEvents();
             }
             vulkan.resize({(uint32_t)width, (uint32_t)height});
-        }
-        else {
+        } else {
             puts(e.what());
         }
     };
     ++frame_count;
 }
 
-void Engine::handle_events() {
-    player.handle_events();
-}
+void Engine::handle_events() { player.handle_events(); }

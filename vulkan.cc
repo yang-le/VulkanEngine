@@ -227,12 +227,24 @@ Vulkan::Texture Vulkan::createTexture(vk::Extent2D extent, const void* data, boo
 
     vk::Format format = vk::Format::eR8G8B8A8Unorm;
     vk::FormatProperties formatProps = physicalDevice.getFormatProperties(format);
+    uint32_t mipLevels = std::floor(std::log2(std::max(extent.width, extent.height))) + 1;
 
     bool needStaging = !(formatProps.linearTilingFeatures & vk::FormatFeatureFlagBits::eSampledImage);
+    if (needStaging) {
+        assert(formatProps.optimalTilingFeatures & vk::FormatFeatureFlagBits::eBlitSrc);
+        assert(formatProps.optimalTilingFeatures & vk::FormatFeatureFlagBits::eBlitDst);
+        assert(formatProps.optimalTilingFeatures & vk::FormatFeatureFlagBits::eSampledImageFilterLinear);
+    }
+    else {
+        assert(formatProps.linearTilingFeatures & vk::FormatFeatureFlagBits::eBlitSrc);
+        assert(formatProps.linearTilingFeatures & vk::FormatFeatureFlagBits::eBlitDst);
+        assert(formatProps.linearTilingFeatures & vk::FormatFeatureFlagBits::eSampledImageFilterLinear);
+    }
+
     std::tie(texture.image, texture.memory) = createImage(extent, format,
         needStaging ? vk::ImageTiling::eOptimal : vk::ImageTiling::eLinear,
-        vk::ImageUsageFlagBits::eSampled | (needStaging ? vk::ImageUsageFlagBits::eTransferDst : vk::ImageUsageFlagBits()),
-        needStaging ? vk::ImageLayout::eUndefined : vk::ImageLayout::ePreinitialized);
+        vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eTransferSrc,
+        needStaging ? vk::ImageLayout::eUndefined : vk::ImageLayout::ePreinitialized, mipLevels);
 
     if (needStaging)
         std::tie(texture.stagingBuffer, texture.stagingMemory) = createBuffer(extent.width * extent.height * 4, vk::BufferUsageFlagBits::eTransferSrc);
@@ -249,11 +261,21 @@ Vulkan::Texture Vulkan::createTexture(vk::Extent2D extent, const void* data, boo
             {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
             vk::Offset3D(0, 0, 0), vk::Extent3D(extent, 1));
         commandBuffer.copyBufferToImage(texture.stagingBuffer, texture.image, vk::ImageLayout::eTransferDstOptimal, copyRegion);
-        setImageLayout(commandBuffer, texture.image, format, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
+        setImageLayout(commandBuffer, texture.image, format, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eTransferSrcOptimal);
     }
     else {
-        setImageLayout(commandBuffer, texture.image, format, vk::ImageLayout::ePreinitialized, vk::ImageLayout::eShaderReadOnlyOptimal);
+        setImageLayout(commandBuffer, texture.image, format, vk::ImageLayout::ePreinitialized, vk::ImageLayout::eTransferSrcOptimal);
     }
+    for (uint32_t i = 1; i < mipLevels; ++i) {
+        vk::ImageBlit imageBlit({vk::ImageAspectFlagBits::eColor, i - 1, 0, 1},
+        {{{}, {int32_t(extent.width >> (i - 1)), int32_t(extent.height >> (i - 1)), 1}}},
+        {vk::ImageAspectFlagBits::eColor, i, 0, 1},
+        {{{}, {int32_t(extent.width >> i), int32_t(extent.height >> i), 1}}});
+        setImageLayout(commandBuffer, texture.image, format, needStaging ? vk::ImageLayout::eUndefined : vk::ImageLayout::ePreinitialized, vk::ImageLayout::eTransferDstOptimal, i);
+        commandBuffer.blitImage(texture.image, vk::ImageLayout::eTransferSrcOptimal, texture.image, vk::ImageLayout::eTransferDstOptimal, imageBlit, vk::Filter::eLinear);
+        setImageLayout(commandBuffer, texture.image, format, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eTransferSrcOptimal, i);
+    }
+    setImageLayout(commandBuffer, texture.image, format, vk::ImageLayout::eTransferSrcOptimal, vk::ImageLayout::eShaderReadOnlyOptimal, 0, mipLevels);
     commandBuffer.end();
 
     vk::Fence fence = device.createFence({});
@@ -261,13 +283,13 @@ Vulkan::Texture Vulkan::createTexture(vk::Extent2D extent, const void* data, boo
     device.waitForFences(fence, vk::True, std::numeric_limits<uint64_t>::max());
     device.destroyFence(fence);
 
-    vk::SamplerCreateInfo samplerCreateInfo({}, vk::Filter::eNearest, vk::Filter::eNearest, vk::SamplerMipmapMode::eNearest,
+    vk::SamplerCreateInfo samplerCreateInfo({}, vk::Filter::eLinear, vk::Filter::eLinear, vk::SamplerMipmapMode::eLinear,
         vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat,
-        0.0f, anisotropy, 16.0f, false, vk::CompareOp::eNever, 0.0f, 0.0f, vk::BorderColor::eFloatOpaqueBlack);
+        0.0f, anisotropy, physicalDevice.getProperties().limits.maxSamplerAnisotropy, false, vk::CompareOp::eNever, 0.0f, mipLevels, vk::BorderColor::eFloatOpaqueBlack);
     texture.sampler = device.createSampler(samplerCreateInfo);
 
     vk::ImageViewCreateInfo imageViewCreateInfo({}, texture.image, vk::ImageViewType::e2D, format, {},
-        {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1});
+        {vk::ImageAspectFlagBits::eColor, 0, mipLevels, 0, 1});
     texture.view = device.createImageView(imageViewCreateInfo);
 
     return texture;
@@ -660,8 +682,8 @@ std::pair<vk::Buffer, VmaAllocation> Vulkan::createBuffer(vk::DeviceSize bufferS
     return {buffer, bufferMemory};
 }
 
-std::pair<vk::Image, VmaAllocation> Vulkan::createImage(vk::Extent2D extent, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::ImageLayout layout) {
-    vk::ImageCreateInfo imageCreateInfo({}, vk::ImageType::e2D, format, vk::Extent3D(extent, 1), 1, 1, vk::SampleCountFlagBits::e1,
+std::pair<vk::Image, VmaAllocation> Vulkan::createImage(vk::Extent2D extent, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::ImageLayout layout, uint32_t mipLevels) {
+    vk::ImageCreateInfo imageCreateInfo({}, vk::ImageType::e2D, format, vk::Extent3D(extent, 1), mipLevels, 1, vk::SampleCountFlagBits::e1,
         tiling, usage, vk::SharingMode::eExclusive, {}, layout);
 
     VmaAllocationCreateInfo allocInfo = {};
@@ -676,33 +698,73 @@ std::pair<vk::Image, VmaAllocation> Vulkan::createImage(vk::Extent2D extent, vk:
     return {image, imageMemory};
 }
 
-void Vulkan::setImageLayout(const vk::CommandBuffer& commandBuffer, vk::Image image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout) {
-    vk::AccessFlags sourceAccessMask, destinationAccessMask;
-    vk::PipelineStageFlags sourceStage, destinationStage;
+void Vulkan::setImageLayout(const vk::CommandBuffer& commandBuffer, vk::Image image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, uint32_t mipLevel, uint32_t mipCount) {
+    vk::AccessFlags sourceAccessMask;
+      switch ( oldLayout )
+      {
+        case vk::ImageLayout::eTransferDstOptimal: sourceAccessMask = vk::AccessFlagBits::eTransferWrite; break;
+        case vk::ImageLayout::eTransferSrcOptimal: sourceAccessMask = vk::AccessFlagBits::eTransferRead; break;
+        case vk::ImageLayout::ePreinitialized: sourceAccessMask = vk::AccessFlagBits::eHostWrite; break;
+        case vk::ImageLayout::eGeneral:  // sourceAccessMask is empty
+        case vk::ImageLayout::eUndefined: break;
+        default: assert( false ); break;
+      }
 
-    if (oldLayout == vk::ImageLayout::eUndefined && newLayout == vk::ImageLayout::eTransferDstOptimal) {
-        destinationAccessMask = vk::AccessFlagBits::eTransferWrite;
-        sourceStage = vk::PipelineStageFlagBits::eTopOfPipe;
-        destinationStage = vk::PipelineStageFlagBits::eTransfer;
-    }
-    else if (oldLayout == vk::ImageLayout::eTransferDstOptimal && newLayout == vk::ImageLayout::eShaderReadOnlyOptimal) {
-        sourceAccessMask = vk::AccessFlagBits::eTransferWrite;
-        destinationAccessMask = vk::AccessFlagBits::eShaderRead;
-        sourceStage = vk::PipelineStageFlagBits::eTransfer;
-        destinationStage = vk::PipelineStageFlagBits::eFragmentShader;
-    }
-    else if (oldLayout == vk::ImageLayout::ePreinitialized && newLayout == vk::ImageLayout::eShaderReadOnlyOptimal) {
-        sourceAccessMask = vk::AccessFlagBits::eHostWrite;
-        destinationAccessMask = vk::AccessFlagBits::eShaderRead;
-        sourceStage = vk::PipelineStageFlagBits::eHost;
-        destinationStage = vk::PipelineStageFlagBits::eFragmentShader;
-    }
-    else {
-        assert(false && "unsupported layout transition");
-    }
+      vk::PipelineStageFlags sourceStage;
+      switch ( oldLayout )
+      {
+        case vk::ImageLayout::eGeneral:
+        case vk::ImageLayout::ePreinitialized: sourceStage = vk::PipelineStageFlagBits::eHost; break;
+        case vk::ImageLayout::eTransferSrcOptimal:
+        case vk::ImageLayout::eTransferDstOptimal: sourceStage = vk::PipelineStageFlagBits::eTransfer; break;
+        case vk::ImageLayout::eUndefined: sourceStage = vk::PipelineStageFlagBits::eTopOfPipe; break;
+        default: assert( false ); break;
+      }
+
+      vk::AccessFlags destinationAccessMask;
+      switch ( newLayout )
+      {
+        case vk::ImageLayout::eColorAttachmentOptimal: destinationAccessMask = vk::AccessFlagBits::eColorAttachmentWrite; break;
+        case vk::ImageLayout::eDepthStencilAttachmentOptimal:
+          destinationAccessMask = vk::AccessFlagBits::eDepthStencilAttachmentRead | vk::AccessFlagBits::eDepthStencilAttachmentWrite;
+          break;
+        case vk::ImageLayout::eGeneral:  // empty destinationAccessMask
+        case vk::ImageLayout::ePresentSrcKHR: break;
+        case vk::ImageLayout::eShaderReadOnlyOptimal: destinationAccessMask = vk::AccessFlagBits::eShaderRead; break;
+        case vk::ImageLayout::eTransferSrcOptimal: destinationAccessMask = vk::AccessFlagBits::eTransferRead; break;
+        case vk::ImageLayout::eTransferDstOptimal: destinationAccessMask = vk::AccessFlagBits::eTransferWrite; break;
+        default: assert( false ); break;
+      }
+
+      vk::PipelineStageFlags destinationStage;
+      switch ( newLayout )
+      {
+        case vk::ImageLayout::eColorAttachmentOptimal: destinationStage = vk::PipelineStageFlagBits::eColorAttachmentOutput; break;
+        case vk::ImageLayout::eDepthStencilAttachmentOptimal: destinationStage = vk::PipelineStageFlagBits::eEarlyFragmentTests; break;
+        case vk::ImageLayout::eGeneral: destinationStage = vk::PipelineStageFlagBits::eHost; break;
+        case vk::ImageLayout::ePresentSrcKHR: destinationStage = vk::PipelineStageFlagBits::eBottomOfPipe; break;
+        case vk::ImageLayout::eShaderReadOnlyOptimal: destinationStage = vk::PipelineStageFlagBits::eFragmentShader; break;
+        case vk::ImageLayout::eTransferDstOptimal:
+        case vk::ImageLayout::eTransferSrcOptimal: destinationStage = vk::PipelineStageFlagBits::eTransfer; break;
+        default: assert( false ); break;
+      }
+
+      vk::ImageAspectFlags aspectMask;
+      if ( newLayout == vk::ImageLayout::eDepthStencilAttachmentOptimal )
+      {
+        aspectMask = vk::ImageAspectFlagBits::eDepth;
+        if ( format == vk::Format::eD32SfloatS8Uint || format == vk::Format::eD24UnormS8Uint )
+        {
+          aspectMask |= vk::ImageAspectFlagBits::eStencil;
+        }
+      }
+      else
+      {
+        aspectMask = vk::ImageAspectFlagBits::eColor;
+      }
 
     vk::ImageMemoryBarrier imageMemoryBarrier(sourceAccessMask, destinationAccessMask, oldLayout, newLayout,
         vk::QueueFamilyIgnored, vk::QueueFamilyIgnored, image,
-        {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1});
+        {aspectMask, mipLevel, mipCount, 0, 1});
     commandBuffer.pipelineBarrier(sourceStage, destinationStage, {}, nullptr, nullptr, imageMemoryBarrier);
 }

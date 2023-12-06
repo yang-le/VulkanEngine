@@ -97,8 +97,8 @@ private:
 
     vk::SurfaceFormatKHR pickSurfaceFormat(const std::vector<vk::SurfaceFormatKHR>& formats);
     std::pair<vk::Buffer, VmaAllocation> createBuffer(vk::DeviceSize bufferSize, vk::BufferUsageFlags bufferUsage, vk::MemoryPropertyFlags bufferProp = {});
-    std::pair<vk::Image, VmaAllocation> createImage(vk::Extent2D extent, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::ImageLayout layout = vk::ImageLayout::eUndefined);
-    void setImageLayout(const vk::CommandBuffer& commandBuffer, vk::Image image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout);
+    std::pair<vk::Image, VmaAllocation> createImage(vk::Extent2D extent, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::ImageLayout layout = vk::ImageLayout::eUndefined, uint32_t mipLevels = 1);
+    void setImageLayout(const vk::CommandBuffer& commandBuffer, vk::Image image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, uint32_t mipLevel = 0, uint32_t mipCount = 1);
 
 
     vk::ApplicationInfo applicationInfo;

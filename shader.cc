@@ -36,11 +36,11 @@ Shader::~Shader() {
 void Shader::init() {
     auto proj = player->proj;
     proj[1][1] *= -1;
-    write("m_proj", proj);
-    write("m_view", player->view);
+    write_uniform("m_proj", proj);
+    write_uniform("m_view", player->view);
 }
 
-void Shader::update() { write("m_view", player->view); }
+void Shader::update() { write_uniform("m_view", player->view); }
 
 void Shader::load(const std::string& shader_name) {
     vert_shader = vulkan->createShaderModule(vk::ShaderStageFlagBits::eVertex,
@@ -49,7 +49,7 @@ void Shader::load(const std::string& shader_name) {
                                              readFile("shaders/" + shader_name + ".frag").data());
 }
 
-void Shader::write(const std::string& name, const std::string& filename) {
+void Shader::write_texture(const std::string& name, const std::string& filename) {
     auto& texture = textures[name];
     if (!texture.sampler) {
         int width, height;

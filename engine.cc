@@ -24,7 +24,7 @@ Engine::Engine() : player(this), water_mesh(this) {
     water_mesh.load("water");
     glslang::FinalizeProcess();
 
-    vulkan.attachShader(water_mesh.vert_shader, water_mesh.frag_shader, water_mesh.vertex, water_mesh.vert_format,
+    vulkan.attachShader(water_mesh.vert_shader, water_mesh.frag_shader, water_mesh.vertex, water_mesh.vert_formats,
                         water_mesh.get_uniforms(), water_mesh.get_textures());
 
     glfwSetWindowUserPointer(window, this);

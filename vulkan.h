@@ -47,8 +47,8 @@ class Vulkan {
     void init(vk::Extent2D extent, std::function<vk::SurfaceKHR(const vk::Instance&)> getSurfaceKHR,
               std::function<bool(const vk::PhysicalDevice&)> pickDevice = {});
     void attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule, const Buffer& vertex,
-                      const std::vector<std::pair<vk::Format, uint32_t>>& vertexInputeAttributeFormatOffset,
-                      const std::vector<Buffer>& uniforms, const std::vector<Texture>& textures);
+                      const std::vector<vk::Format>& vertexFormats, const std::vector<Buffer>& uniforms,
+                      const std::vector<Texture>& textures);
     void draw();
     void resize(vk::Extent2D extent);
 
@@ -91,9 +91,7 @@ class Vulkan {
     void initRenderPass();
     void initFrameBuffers();
     void initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
-                      uint32_t vertexStride,
-                      const std::vector<std::pair<vk::Format, uint32_t>>& vertexInputeAttributeFormatOffset,
-                      bool depthBuffered = true);
+                      uint32_t vertexStride, const std::vector<vk::Format>& vertexFormats, bool depthBuffered = true);
     void destroySwapChain();
 
     //

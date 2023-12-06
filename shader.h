@@ -15,7 +15,7 @@ struct Shader {
     void load(const std::string &shader_name);
 
     template <typename T>
-    void write(const std::string &name, const T &data) {
+    void write_uniform(const std::string &name, const T &data) {
         auto &buffer = uniforms[name];
         if (!buffer.data) buffer = vulkan->createUniformBuffer(sizeof(T));
 
@@ -23,16 +23,11 @@ struct Shader {
     }
 
     template <typename T, size_t Size>
-    void write(const T (&data)[Size]) {
+    void write_vertex(const T (&data)[Size]) {
         vertex = vulkan->createVertexBuffer(data);
     }
 
-    template <size_t Size>
-    void write(const std::string &name, const char (&filename)[Size]) {
-        write(name, std::string(filename));
-    }
-
-    void write(const std::string &name, const std::string &filename);
+    void write_texture(const std::string &name, const std::string &filename);
 
     std::vector<Vulkan::Buffer> get_uniforms() {
         std::vector<Vulkan::Buffer> result;
@@ -43,10 +38,11 @@ struct Shader {
     std::vector<Vulkan::Texture> get_textures() {
         std::vector<Vulkan::Texture> result;
         for (auto &it : textures) result.push_back(it.second);
+        return result;
     }
 
     Vulkan::Buffer vertex;
-    std::vector<std::pair<vk::Format, uint32_t>> vert_format;
+    std::vector<vk::Format> vert_formats;
     std::map<std::string, Vulkan::Buffer> uniforms;
     std::map<std::string, Vulkan::Texture> textures;
     vk::ShaderModule vert_shader = {};

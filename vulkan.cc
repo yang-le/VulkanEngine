@@ -1,6 +1,8 @@
 #define VMA_IMPLEMENTATION
 #include "vulkan.h"
 
+#include <vulkan/vulkan_format_traits.hpp>
+
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
 namespace {
@@ -158,8 +160,7 @@ void Vulkan::init(vk::Extent2D extent, std::function<vk::SurfaceKHR(const vk::In
 };
 
 void Vulkan::attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
-                          const Buffer& vertex,
-                          const std::vector<std::pair<vk::Format, uint32_t>>& vertexInputeAttributeFormatOffset,
+                          const Buffer& vertex, const std::vector<vk::Format>& vertexFormats,
                           const std::vector<Buffer>& uniforms, const std::vector<Texture>& textures) {
     vertexBuffer = vertex;
     uniformBuffers = uniforms;
@@ -167,7 +168,7 @@ void Vulkan::attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule 
 
     initPipelineLayout();
     initDescriptorSet();
-    initPipeline(vertexShaderModule, fragmentShaderModule, vertexBuffer.stride, vertexInputeAttributeFormatOffset);
+    initPipeline(vertexShaderModule, fragmentShaderModule, vertexBuffer.stride, vertexFormats);
 }
 
 void Vulkan::draw() {
@@ -596,9 +597,7 @@ void Vulkan::initFrameBuffers() {
 }
 
 void Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
-                          uint32_t vertexStride,
-                          const std::vector<std::pair<vk::Format, uint32_t>>& vertexInputeAttributeFormatOffset,
-                          bool depthBuffered) {
+                          uint32_t vertexStride, const std::vector<vk::Format>& vertexFormats, bool depthBuffered) {
     std::array<vk::PipelineShaderStageCreateInfo, 2> pipelineShaderStageCreateInfos = {
         vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eVertex, vertexShaderModule, "main"),
         vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eFragment, fragmentShaderModule, "main")};
@@ -608,10 +607,9 @@ void Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::
     vk::PipelineVertexInputStateCreateInfo pipelineVertexInputeStateCreateInfo;
 
     if (vertexStride > 0) {
-        vertexInputAtrributeDescription.reserve(vertexInputeAttributeFormatOffset.size());
-        for (uint32_t i = 0; i < vertexInputeAttributeFormatOffset.size(); ++i) {
-            vertexInputAtrributeDescription.emplace_back(i, 0, vertexInputeAttributeFormatOffset[i].first,
-                                                         vertexInputeAttributeFormatOffset[i].second);
+        vertexInputAtrributeDescription.reserve(vertexFormats.size());
+        for (uint32_t i = 0; i < vertexFormats.size(); ++i) {
+            vertexInputAtrributeDescription.emplace_back(i, 0, vertexFormats[i], vk::blockSize(vertexFormats[i]));
         }
         pipelineVertexInputeStateCreateInfo.setVertexBindingDescriptions(vertexInputBindingDescription);
         pipelineVertexInputeStateCreateInfo.setVertexAttributeDescriptions(vertexInputAtrributeDescription);

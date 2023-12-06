@@ -1,8 +1,8 @@
 #pragma once
 
-#include "shader.h"
 #include <stdint.h>
 
+#include "shader.h"
 
 struct WaterMesh : Shader {
     WaterMesh(Engine* engine);

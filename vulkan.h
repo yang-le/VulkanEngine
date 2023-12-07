@@ -86,8 +86,8 @@ class Vulkan {
     void initCommandBuffer();
     void initSwapChain(vk::Extent2D extent);
     void initDepthBuffer();
-    void initPipelineLayout();
-    void initDescriptorSet();
+    void initPipelineLayout(const std::vector<Buffer>& uniforms, const std::vector<Texture>& textures);
+    void initDescriptorSet(const std::vector<Buffer>& uniforms, const std::vector<Texture>& textures);
     void initRenderPass();
     void initFrameBuffers();
     void initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
@@ -109,7 +109,7 @@ class Vulkan {
                         vk::ImageLayout oldLayout, vk::ImageLayout newLayout, uint32_t mipLevel = 0,
                         uint32_t mipCount = 1);
 
-    vk::ApplicationInfo applicationInfo;
+    vk::ApplicationInfo applicationInfo = {};
     vk::InstanceCreateInfo instanceCreateInfo;
     vk::Instance instance;
     vk::SurfaceKHR surface;
@@ -131,18 +131,55 @@ class Vulkan {
     std::vector<vk::Image> swapChainImages;
     std::vector<vk::ImageView> swapChainImageViews;
     vk::PipelineLayout pipelineLayout;
-    std::array<vk::DescriptorSetLayout, 2> descriptorSetLayout;
-    std::array<vk::DescriptorPool, 2> descriptorPool;
-    std::array<vk::DescriptorSet, 2> descriptorSets;
+    std::vector<vk::DescriptorSetLayout> descriptorSetLayouts;
+    std::vector<vk::DescriptorPool> descriptorPools;
+    std::vector<vk::DescriptorSet> descriptorSets;
     vk::Image depthImage;
     VmaAllocation depthMemory;
     vk::ImageView depthImageView;
+    vk::Image colorImage;
+    VmaAllocation colorMemory;
+    vk::ImageView colorImageView;
     Buffer vertexBuffer;
-    std::vector<Buffer> uniformBuffers;
-    std::vector<Texture> textures;
     std::vector<vk::Framebuffer> framebuffers;
     vk::RenderPass renderPass;
     vk::Pipeline graphicsPipeline;
-    vk::Semaphore imageAcquiredSemaphore;
-    vk::Fence drawFence;
+
+    struct FrameInFlight {
+        static constexpr int FRAME_IN_FLIGHT = 3;
+
+        std::array<vk::CommandBuffer, FRAME_IN_FLIGHT> commandBuffers;
+        std::array<vk::Semaphore, FRAME_IN_FLIGHT> imageAcquiredSemaphores;
+        std::array<vk::Semaphore, FRAME_IN_FLIGHT> imageRenderedSemaphores;
+        std::array<vk::Fence, FRAME_IN_FLIGHT> drawFences;
+        int current = 0;
+
+        void init(const vk::Device& device, const vk::CommandPool& commandPool) {
+            for (int i = 0; i < FRAME_IN_FLIGHT; ++i) {
+                imageAcquiredSemaphores[i] = device.createSemaphore({});
+                imageRenderedSemaphores[i] = device.createSemaphore({});
+                drawFences[i] = device.createFence({vk::FenceCreateFlagBits::eSignaled});
+            }
+            vk::CommandBufferAllocateInfo commandBufferAllocateInfo(commandPool, vk::CommandBufferLevel::ePrimary,
+                                                                    FRAME_IN_FLIGHT);
+            device.allocateCommandBuffers(&commandBufferAllocateInfo, commandBuffers.data());
+        }
+
+        void destroy(const vk::Device& device, const vk::CommandPool& commandPool) {
+            for (int i = 0; i < FRAME_IN_FLIGHT; ++i) {
+                device.destroySemaphore(imageAcquiredSemaphores[i]);
+                device.destroySemaphore(imageRenderedSemaphores[i]);
+                device.destroyFence(drawFences[i]);
+            }
+            device.freeCommandBuffers(commandPool, commandBuffers);
+        }
+
+        const vk::Semaphore& imageAcquiredSemaphore() const { return imageAcquiredSemaphores[current]; }
+        const vk::Semaphore& imageRenderedSemaphore() const { return imageRenderedSemaphores[current]; }
+        const vk::Fence& drawFence() const { return drawFences[current]; }
+        const vk::CommandBuffer& commandBuffer() const { return commandBuffers[current]; }
+
+        void next() { current = (current + 1) % FRAME_IN_FLIGHT; }
+    };
+    FrameInFlight frame;
 };

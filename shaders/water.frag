@@ -7,7 +7,7 @@ layout(location = 0) in vec2 uv;
 
 layout(location = 0) out vec4 fragColor;
 
-layout(set=1, binding = 0) uniform sampler2D u_texture_0;
+layout(binding = 4) uniform sampler2D u_texture_0;
 
 
 void main() {

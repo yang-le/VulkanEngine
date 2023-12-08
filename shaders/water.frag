@@ -1,13 +1,13 @@
 #version 450
 
-const vec3 gamma = vec3(2.2);
-const vec3 inv_gamma = 1 / gamma;
+// const vec3 gamma = vec3(2.2);
+// const vec3 inv_gamma = 1 / gamma;
 
 layout(location = 0) in vec2 uv;
 
 layout(location = 0) out vec4 fragColor;
 
-layout(binding = 4) uniform sampler2D u_texture_0;
+layout(binding = 2) uniform sampler2D u_texture_0;
 
 
 void main() {

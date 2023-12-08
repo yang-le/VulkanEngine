@@ -5,6 +5,7 @@
 
 #include <bitset>
 
+#include "meshes/cloud_mesh.h"
 #include "meshes/water_mesh.h"
 #include "player.h"
 #include "settings.h"
@@ -20,11 +21,12 @@ struct Engine {
     void handle_events();
 
     Vulkan vulkan;
-    WaterMesh water_mesh;
     GLFWwindow* window;
     Player player;
     float fps = 0;
     float t = 0, x = 0, y = 0;
     float dt = 0, dx = 0, dy = 0;
     std::bitset<GLFW_KEY_LAST> key_state;
+
+    std::vector<std::unique_ptr<Shader>> meshes;
 };

@@ -1,6 +1,6 @@
 #include "engine.h"
 
-Engine::Engine() : player(this), water_mesh(this) {
+Engine::Engine() : player(this) {
     glfwInit();
 
     uint32_t count;
@@ -18,14 +18,20 @@ Engine::Engine() : player(this), water_mesh(this) {
         return surfaceKHR;
     });
 
-    water_mesh.init();
+    meshes.push_back(std::make_unique<WaterMesh>(this));
+    meshes.push_back(std::make_unique<CloudMesh>(this));
+
+    for (auto& mesh : meshes) mesh->init();
 
     glslang::InitializeProcess();
-    water_mesh.load("water");
+    for (auto& mesh : meshes) mesh->load();
     glslang::FinalizeProcess();
 
-    vulkan.attachShader(water_mesh.vert_shader, water_mesh.frag_shader, water_mesh.vertex, water_mesh.vert_formats,
-                        water_mesh.get_uniforms(), water_mesh.get_textures());
+    for (auto& mesh : meshes)
+        vulkan.attachShader(mesh->vert_shader, mesh->frag_shader, mesh->vertex, mesh->vert_formats, mesh->uniforms,
+                            mesh->textures, mesh->cull_mode);
+
+    vulkan.setBackgroudColor({BG_COLOR.r, BG_COLOR.g, BG_COLOR.b, 1.0f});
 
     glfwSetWindowUserPointer(window, this);
     glfwSetMouseButtonCallback(window, [](GLFWwindow* window, int button, int action, int mods) {
@@ -80,14 +86,14 @@ void Engine::run() {
 }
 
 void Engine::update() {
-    player.update();
-    water_mesh.update();
-
     auto prev_t = std::exchange(t, glfwGetTime());
     dt = t - prev_t;
 
     fps = 1 / dt;
     glfwSetWindowTitle(window, std::to_string(fps).c_str());
+
+    player.update();
+    for (auto& mesh : meshes) mesh->update();
 
     dx = dy = 0;
 }

@@ -20,6 +20,7 @@ class Vulkan {
 
         size_t size = 0;
         size_t stride = 0;
+        vk::ShaderStageFlags stage = vk::ShaderStageFlagBits::eVertex;
     };
 
     struct Texture {
@@ -30,6 +31,7 @@ class Vulkan {
 
         vk::Buffer stagingBuffer = {};
         VmaAllocation stagingMemory = {};
+        vk::ShaderStageFlags stage = vk::ShaderStageFlagBits::eFragment;
     };
 
     Vulkan() = default;
@@ -43,12 +45,13 @@ class Vulkan {
     Vulkan& setDeviceLayers(const vk::ArrayProxyNoTemporaries<const char* const>& layers);
     Vulkan& setDeviceExtensions(const vk::ArrayProxyNoTemporaries<const char* const>& extensions);
     Vulkan& setDeviceFeatures(const vk::PhysicalDeviceFeatures& features);
+    Vulkan& setBackgroudColor(const vk::ClearColorValue& value);
 
     void init(vk::Extent2D extent, std::function<vk::SurfaceKHR(const vk::Instance&)> getSurfaceKHR,
               std::function<bool(const vk::PhysicalDevice&)> pickDevice = {});
     void attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule, const Buffer& vertex,
-                      const std::vector<vk::Format>& vertexFormats, const std::vector<Buffer>& uniforms,
-                      const std::vector<Texture>& textures);
+                      const std::vector<vk::Format>& vertexFormats, const std::map<int, Buffer>& uniforms,
+                      const std::map<int, Texture>& textures, vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack);
     void draw();
     void resize(vk::Extent2D extent);
 
@@ -71,6 +74,22 @@ class Vulkan {
 
         return buffer;
     }
+    template <typename T>
+    Buffer createVertexBuffer(const std::vector<T>& vertices) {
+        Buffer buffer;
+        buffer.stride = sizeof(T);
+        buffer.size = sizeof(T) * vertices.size();
+
+        std::tie(buffer.buffer, buffer.memory) =
+            createBuffer(buffer.size, vk::BufferUsageFlagBits::eVertexBuffer,
+                         vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+
+        vmaMapMemory(vmaAllocator, buffer.memory, &buffer.data);
+        memcpy(buffer.data, vertices.data(), buffer.size);
+        vmaUnmapMemory(vmaAllocator, buffer.memory);
+
+        return buffer;
+    }
     void destroyVertexBuffer(const Buffer& buffer);
 
     Texture createTexture(vk::Extent2D extent, const void* data, bool anisotropy = false);
@@ -86,12 +105,12 @@ class Vulkan {
     void initCommandBuffer();
     void initSwapChain(vk::Extent2D extent);
     void initDepthBuffer();
-    void initPipelineLayout(const std::vector<Buffer>& uniforms, const std::vector<Texture>& textures);
-    void initDescriptorSet(const std::vector<Buffer>& uniforms, const std::vector<Texture>& textures);
     void initRenderPass();
     void initFrameBuffers();
+    void initDescriptorSet(const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures);
     void initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
-                      uint32_t vertexStride, const std::vector<vk::Format>& vertexFormats, bool depthBuffered = true);
+                      uint32_t vertexStride, const std::vector<vk::Format>& vertexFormats, vk::CullModeFlags cullMode,
+                      bool depthBuffered = true);
     void destroySwapChain();
 
     //
@@ -130,20 +149,18 @@ class Vulkan {
     vk::SwapchainKHR swapChain;
     std::vector<vk::Image> swapChainImages;
     std::vector<vk::ImageView> swapChainImageViews;
-    vk::PipelineLayout pipelineLayout;
     std::vector<vk::DescriptorSetLayout> descriptorSetLayouts;
     std::vector<vk::DescriptorPool> descriptorPools;
     std::vector<vk::DescriptorSet> descriptorSets;
     vk::Image depthImage;
     VmaAllocation depthMemory;
     vk::ImageView depthImageView;
-    vk::Image colorImage;
-    VmaAllocation colorMemory;
-    vk::ImageView colorImageView;
-    Buffer vertexBuffer;
+    std::vector<Buffer> vertexBuffers;
     std::vector<vk::Framebuffer> framebuffers;
     vk::RenderPass renderPass;
-    vk::Pipeline graphicsPipeline;
+    std::vector<vk::PipelineLayout> pipelineLayouts;
+    std::vector<vk::Pipeline> graphicsPipelines;
+    vk::ClearColorValue bgColor;
 
     struct FrameInFlight {
         static constexpr int FRAME_IN_FLIGHT = 3;

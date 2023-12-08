@@ -1,8 +1,10 @@
+#include "shader.h"
+
 #include <fstream>
 
-#define STB_IMAGE_IMPLEMENTATION
 #include "engine.h"
-#include "shader.h"
+
+#define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
 namespace {
@@ -23,7 +25,8 @@ std::vector<char> readFile(const std::string& filename) {
 }
 }  // namespace
 
-Shader::Shader(Engine* engine) : engine(engine), vulkan(&engine->vulkan), player(&engine->player) {}
+Shader::Shader(const std::string& name, Engine* engine)
+    : shader_name(name), engine(engine), vulkan(&engine->vulkan), player(&engine->player) {}
 
 Shader::~Shader() {
     vulkan->destroyVertexBuffer(vertex);
@@ -36,21 +39,21 @@ Shader::~Shader() {
 void Shader::init() {
     auto proj = player->proj;
     proj[1][1] *= -1;
-    write_uniform("m_proj", proj);
-    write_uniform("m_view", player->view);
+    write_uniform(0, proj);
+    write_uniform(1, player->view);
 }
 
-void Shader::update() { write_uniform("m_view", player->view); }
+void Shader::update() { write_uniform(1, player->view); }
 
-void Shader::load(const std::string& shader_name) {
+void Shader::load() {
     vert_shader = vulkan->createShaderModule(vk::ShaderStageFlagBits::eVertex,
                                              readFile("shaders/" + shader_name + ".vert").data());
     frag_shader = vulkan->createShaderModule(vk::ShaderStageFlagBits::eFragment,
                                              readFile("shaders/" + shader_name + ".frag").data());
 }
 
-void Shader::write_texture(const std::string& name, const std::string& filename) {
-    auto& texture = textures[name];
+void Shader::write_texture(int binding, const std::string& filename) {
+    auto& texture = textures[binding];
     if (!texture.sampler) {
         int width, height;
         std::string path = "assets/" + filename;

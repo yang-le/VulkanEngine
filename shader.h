@@ -7,19 +7,20 @@
 struct Engine;
 
 struct Shader {
-    Shader(Engine *engine);
+    Shader(const std::string &name, Engine *engine);
     ~Shader();
 
     virtual void init();
     virtual void update();
-    void load(const std::string &shader_name);
+    void load();
 
     template <typename T>
-    void write_uniform(const std::string &name, const T &data) {
-        auto &buffer = uniforms[name];
+    void write_uniform(int binding, const T &data, vk::ShaderStageFlags stage = {}) {
+        auto &buffer = uniforms[binding];
         if (!buffer.data) buffer = vulkan->createUniformBuffer(sizeof(T));
 
         memcpy(buffer.data, &data, sizeof(T));
+        if (stage) buffer.stage = stage;
     }
 
     template <typename T, size_t Size>
@@ -27,26 +28,21 @@ struct Shader {
         vertex = vulkan->createVertexBuffer(data);
     }
 
-    void write_texture(const std::string &name, const std::string &filename);
-
-    std::vector<Vulkan::Buffer> get_uniforms() {
-        std::vector<Vulkan::Buffer> result;
-        for (auto &it : uniforms) result.push_back(it.second);
-        return result;
+    template <typename T>
+    void write_vertex(const std::vector<T> &data) {
+        vertex = vulkan->createVertexBuffer(data);
     }
 
-    std::vector<Vulkan::Texture> get_textures() {
-        std::vector<Vulkan::Texture> result;
-        for (auto &it : textures) result.push_back(it.second);
-        return result;
-    }
+    void write_texture(int binding, const std::string &filename);
 
     Vulkan::Buffer vertex;
     std::vector<vk::Format> vert_formats;
-    std::map<std::string, Vulkan::Buffer> uniforms;
-    std::map<std::string, Vulkan::Texture> textures;
+    std::map<int, Vulkan::Buffer> uniforms;
+    std::map<int, Vulkan::Texture> textures;
     vk::ShaderModule vert_shader = {};
     vk::ShaderModule frag_shader = {};
+    std::string shader_name;
+    vk::CullModeFlags cull_mode = vk::CullModeFlagBits::eBack;
 
     Engine *engine;
     Vulkan *vulkan;

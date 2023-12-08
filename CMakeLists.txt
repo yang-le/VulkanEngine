@@ -12,7 +12,7 @@ find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 add_executable(vulkan-engine
     main.cc vulkan.cc engine.cc player.cc shader.cc
-    meshes/water_mesh.cc
+    meshes/water_mesh.cc meshes/cloud_mesh.cc
 )
 
 target_link_libraries(vulkan-engine PRIVATE glfw)

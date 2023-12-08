@@ -1,13 +1,10 @@
 #include "meshes/water_mesh.h"
 
-#include <vulkan/vulkan_enums.hpp>
-
 #include "engine.h"
-#include "settings.h"
-#include "shader.h"
 
-WaterMesh::WaterMesh(Engine* engine) : Shader(engine) {
+WaterMesh::WaterMesh(Engine* engine) : Shader("water", engine) {
     vert_formats = {vk::Format::eR32G32B32Sfloat, vk::Format::eR32G32Sfloat};
+    cull_mode = vk::CullModeFlagBits::eNone;
 }
 
 void WaterMesh::init() {
@@ -17,7 +14,5 @@ void WaterMesh::init() {
                      {0, 0, 0, 0, 0}, {0, 0, 1, 0, 1}, {1, 0, 1, 1, 1}};
     write_vertex(data);
 
-    write_uniform("water_area", WATER_AREA);
-    write_uniform("water_line", WATER_LINE);
-    write_texture("u_texture", "water.png");
+    write_texture(2, "water.png");
 }

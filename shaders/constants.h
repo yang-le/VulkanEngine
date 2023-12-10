@@ -1,5 +1,8 @@
 // Constants
 
+const vec3 gamma = vec3(2.2);
+const vec3 inv_gamma = 1 / gamma;
+
 const int water_area = 4800;
 const float water_line = 5.6;
 const vec3 cloud_color = vec3(1);

@@ -57,4 +57,11 @@ struct Camera {
     glm::vec3 position;
     glm::vec3 up, right, forward;
     glm::mat4 proj, view;
+
+    struct Frustum {
+        const float factor_y = 1.0 / std::cos(V_FOV * 0.5);
+        const float tan_y = std::tan(V_FOV * 0.5);
+        const float factor_x = 1.0 / std::cos(H_FOV * 0.5);
+        const float tan_x = std::tan(H_FOV * 0.5);
+    } frustum;
 };

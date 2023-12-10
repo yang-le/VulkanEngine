@@ -14,6 +14,7 @@ struct ChunkMesh : Shader {
 
     Voxels build_voxels();
     void build_mesh();
+    bool is_on_frustum(const Camera& camera);
 
     World* world;
     bool empty = true;

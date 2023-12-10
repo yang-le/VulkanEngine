@@ -40,14 +40,15 @@ void set_voxel_id(std::array<uint8_t, CHUNK_VOL>& voxels, int x, int y, int z, i
     if (wy < world_height - 1)
         // create caves
         if (glm::simplex(glm::vec3(wx * 0.09, wy * 0.09, wz * 0.09)) > 0 &&
-            glm::simplex(glm::vec2(wx * 0.1, wz * 0.1)) * 3.0f + 3.0f < wy && wy < world_height - 10)
+            glm::simplex(glm::vec2(wx * 0.1, wz * 0.1)) * 3 + 3 < wy && wy < world_height - 10)
             voxel_id = 0;
         else
             voxel_id = STONE;
     else {
-        std::random_device r;
-        std::default_random_engine e(r());
-        std::uniform_real_distribution<float> uniform_dist(0, 7);
+        static std::random_device r;
+        static std::default_random_engine e(r());
+        static std::uniform_real_distribution<float> uniform_dist(0, 7);
+
         float ry = wy - uniform_dist(e);
         if (SNOW_LVL <= ry && ry < world_height)
             voxel_id = SNOW;
@@ -157,7 +158,7 @@ void ChunkMesh::init() {
 }
 
 ChunkMesh::Voxels ChunkMesh::build_voxels() {
-    Voxels voxels;
+    Voxels voxels = {0};
 
     auto chunk_pos = glm::ivec3(position) * CHUNK_SIZE;
     for (int x = 0; x < CHUNK_SIZE; ++x)
@@ -172,6 +173,8 @@ ChunkMesh::Voxels ChunkMesh::build_voxels() {
                 set_voxel_id(voxels, x, y, z, wx, wy, wz, world_height);
             }
         }
+
+    empty = !std::any_of(voxels.begin(), voxels.end(), [](uint8_t id) { return id != 0; });
 
     return voxels;
 }
@@ -295,4 +298,25 @@ void ChunkMesh::build_mesh() {
 
     mesh.shrink_to_fit();
     write_vertex(mesh);
+}
+
+bool ChunkMesh::is_on_frustum(const Camera& camera) {
+    // vector to sphere center
+    auto sphere_vec = center - camera.position;
+
+    // outside the NEAR and FAR planes?
+    auto sz = glm::dot(sphere_vec, camera.forward);
+    if (sz < NEAR - CHUNK_SPHERE_RADIUS || sz > FAR + CHUNK_SPHERE_RADIUS) return false;
+
+    // outside the TOP and BOTTOM planes?
+    auto sy = glm::dot(sphere_vec, camera.up);
+    auto dist = camera.frustum.factor_y * CHUNK_SPHERE_RADIUS + sz * camera.frustum.tan_y;
+    if (sy < -dist || sy > dist) return false;
+
+    // outside the LEFT and RIGHT planes?
+    auto sx = glm::dot(sphere_vec, camera.right);
+    dist = camera.frustum.factor_x * CHUNK_SPHERE_RADIUS + sz * camera.frustum.tan_x;
+    if (sx < -dist || sx > dist) return false;
+
+    return true;
 }

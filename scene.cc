@@ -17,8 +17,9 @@ void Scene::init() {
         vulkan->attachShader(mesh->vert_shader, mesh->frag_shader, mesh->vertex, mesh->vert_formats, mesh->uniforms,
                              mesh->textures, mesh->cull_mode);
     for (auto& mesh : world->chunks)
-        vulkan->attachShader(mesh->vert_shader, mesh->frag_shader, mesh->vertex, mesh->vert_formats, mesh->uniforms,
-                             mesh->textures, mesh->cull_mode);
+        if (!mesh->empty)
+            vulkan->attachShader(mesh->vert_shader, mesh->frag_shader, mesh->vertex, mesh->vert_formats, mesh->uniforms,
+                                 mesh->textures, mesh->cull_mode);
 }
 
 void Scene::update() {

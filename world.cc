@@ -1,5 +1,7 @@
 #include "world.h"
 
+#include "engine.h"
+
 World::World(Engine* engine) : engine(engine) {
 #ifdef _DEBUG
 #pragma omp parallel for
@@ -18,21 +20,26 @@ World::World(Engine* engine) : engine(engine) {
 
 void World::init() {
 #ifdef _DEBUG
-    for (auto& chunk : chunks) chunk->init();
+    for (auto& chunk : chunks)
+        if (!chunk->empty) chunk->init();
 #pragma omp parallel for
-    for (auto& chunk : chunks) chunk->build_mesh();
+    for (auto& chunk : chunks)
+        if (!chunk->empty) chunk->build_mesh();
 #else
-    for (auto& chunk : chunks) {
-        chunk->init();
-        chunk->build_mesh();
-    }
+    for (auto& chunk : chunks)
+        if (!chunk->empty) {
+            chunk->init();
+            chunk->build_mesh();
+        }
 #endif
 }
 
 void World::update() {
-    for (auto& chunk : chunks) chunk->update();
+    for (auto& chunk : chunks)
+        if (!chunk->empty /*&& chunk->is_on_frustum(engine->player) */) chunk->update();
 }
 
 void World::load() {
-    for (auto& chunk : chunks) chunk->load();
+    for (auto& chunk : chunks)
+        if (!chunk->empty) chunk->load();
 }

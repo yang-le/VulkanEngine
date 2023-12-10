@@ -1,15 +1,16 @@
 #pragma once
 
-#include <functional>
+#include <glslang/Public/ResourceLimits.h>
+#include <glslang/SPIRV/GlslangToSpv.h>
 
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>
 
 #define VMA_STATIC_VULKAN_FUNCTIONS 0
 #define VMA_DYNAMIC_VULKAN_FUNCTIONS 1
-#include <glslang/Public/ResourceLimits.h>
-#include <glslang/SPIRV/GlslangToSpv.h>
 #include <vk_mem_alloc.h>
+
+#include <functional>
 
 class Vulkan {
    public:
@@ -92,7 +93,7 @@ class Vulkan {
     }
     void destroyVertexBuffer(const Buffer& buffer);
 
-    Texture createTexture(vk::Extent2D extent, const void* data, bool anisotropy = false);
+    Texture createTexture(vk::Extent2D extent, const void* data, uint32_t layers = 1, bool anisotropy = false);
     void destroyTexture(const Texture& texture);
 
     vk::ShaderModule createShaderModule(vk::ShaderStageFlagBits shaderStage, const std::string& shaderText);
@@ -123,10 +124,10 @@ class Vulkan {
     std::pair<vk::Image, VmaAllocation> createImage(vk::Extent2D extent, vk::Format format, vk::ImageTiling tiling,
                                                     vk::ImageUsageFlags usage,
                                                     vk::ImageLayout layout = vk::ImageLayout::eUndefined,
-                                                    uint32_t mipLevels = 1);
+                                                    uint32_t mipLevels = 1, uint32_t layers = 1);
     void setImageLayout(const vk::CommandBuffer& commandBuffer, vk::Image image, vk::Format format,
                         vk::ImageLayout oldLayout, vk::ImageLayout newLayout, uint32_t mipLevel = 0,
-                        uint32_t mipCount = 1);
+                        uint32_t layerCount = 1, uint32_t mipCount = 1);
 
     vk::ApplicationInfo applicationInfo = {};
     vk::InstanceCreateInfo instanceCreateInfo;

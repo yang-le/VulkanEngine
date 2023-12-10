@@ -52,7 +52,7 @@ void Shader::load() {
                                              readFile("shaders/" + shader_name + ".frag").data());
 }
 
-void Shader::write_texture(int binding, const std::string& filename) {
+void Shader::write_texture(int binding, const std::string& filename, uint32_t layers) {
     auto& texture = textures[binding];
     if (!texture.sampler) {
         int width, height;
@@ -60,7 +60,7 @@ void Shader::write_texture(int binding, const std::string& filename) {
         stbi_uc* image = stbi_load(path.c_str(), &width, &height, nullptr, STBI_rgb_alpha);
         if (!image) throw std::runtime_error("Failed to load a Texture file! (" + filename + ")");
 
-        texture = vulkan->createTexture({(uint32_t)width, (uint32_t)height}, image);
+        texture = vulkan->createTexture({(uint32_t)width, (uint32_t)height / layers}, image, layers);
         stbi_image_free(image);
     }
 }

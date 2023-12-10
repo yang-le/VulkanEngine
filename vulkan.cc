@@ -3,6 +3,8 @@
 
 #include <vulkan/vulkan_format_traits.hpp>
 
+#include "DirStackFileIncluder.h"
+
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
 namespace {
@@ -60,7 +62,10 @@ bool GLSLtoSPV(const vk::ShaderStageFlagBits shaderType, const std::string& glsl
     // Enable SPIR-V and Vulkan rules when parsing GLSL
     EShMessages messages = (EShMessages)(EShMsgSpvRules | EShMsgVulkanRules);
 
-    if (!shader.parse(GetDefaultResources(), 100, false, messages)) {
+    DirStackFileIncluder includer;
+    includer.pushExternalLocalDirectory("shaders");
+
+    if (!shader.parse(GetDefaultResources(), 100, false, messages, includer)) {
         puts(shader.getInfoLog());
         puts(shader.getInfoDebugLog());
         return false;
@@ -247,14 +252,14 @@ void Vulkan::destroyVertexBuffer(const Buffer& buffer) {
     if (buffer.size) vmaDestroyBuffer(vmaAllocator, buffer.buffer, buffer.memory);
 }
 
-Vulkan::Texture Vulkan::createTexture(vk::Extent2D extent, const void* data, bool anisotropy) {
+Vulkan::Texture Vulkan::createTexture(vk::Extent2D extent, const void* data, uint32_t layers, bool anisotropy) {
     Texture texture;
 
     vk::Format format = vk::Format::eR8G8B8A8Unorm;
     vk::FormatProperties formatProps = physicalDevice.getFormatProperties(format);
     uint32_t mipLevels = std::floor(std::log2(std::max(extent.width, extent.height))) + 1;
 
-    bool needStaging = !(formatProps.linearTilingFeatures & vk::FormatFeatureFlagBits::eSampledImage);
+    bool needStaging = !(formatProps.linearTilingFeatures & vk::FormatFeatureFlagBits::eSampledImage) || (layers > 1);
     if (needStaging) {
         assert(formatProps.optimalTilingFeatures & vk::FormatFeatureFlagBits::eBlitSrc);
         assert(formatProps.optimalTilingFeatures & vk::FormatFeatureFlagBits::eBlitDst);
@@ -268,22 +273,23 @@ Vulkan::Texture Vulkan::createTexture(vk::Extent2D extent, const void* data, boo
     std::tie(texture.image, texture.memory) = createImage(
         extent, format, needStaging ? vk::ImageTiling::eOptimal : vk::ImageTiling::eLinear,
         vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eTransferSrc,
-        needStaging ? vk::ImageLayout::eUndefined : vk::ImageLayout::ePreinitialized, mipLevels);
+        needStaging ? vk::ImageLayout::eUndefined : vk::ImageLayout::ePreinitialized, mipLevels, layers);
 
     if (needStaging)
         std::tie(texture.stagingBuffer, texture.stagingMemory) =
-            createBuffer(extent.width * extent.height * 4, vk::BufferUsageFlagBits::eTransferSrc);
+            createBuffer(extent.width * extent.height * layers * 4, vk::BufferUsageFlagBits::eTransferSrc,
+                         vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 
     void* textureData;
     vmaMapMemory(vmaAllocator, needStaging ? texture.stagingMemory : texture.memory, &textureData);
-    memcpy(textureData, data, extent.width * extent.height * 4);
+    memcpy(textureData, data, extent.width * extent.height * layers * 4);
     vmaUnmapMemory(vmaAllocator, needStaging ? texture.stagingMemory : texture.memory);
 
     commandBuffer.begin(vk::CommandBufferBeginInfo());
     if (needStaging) {
         setImageLayout(commandBuffer, texture.image, format, vk::ImageLayout::eUndefined,
                        vk::ImageLayout::eTransferDstOptimal);
-        vk::BufferImageCopy copyRegion(0, extent.width, extent.height, {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+        vk::BufferImageCopy copyRegion(0, extent.width, extent.height, {vk::ImageAspectFlagBits::eColor, 0, 0, layers},
                                        vk::Offset3D(0, 0, 0), vk::Extent3D(extent, 1));
         commandBuffer.copyBufferToImage(texture.stagingBuffer, texture.image, vk::ImageLayout::eTransferDstOptimal,
                                         copyRegion);
@@ -294,20 +300,20 @@ Vulkan::Texture Vulkan::createTexture(vk::Extent2D extent, const void* data, boo
                        vk::ImageLayout::eTransferSrcOptimal);
     }
     for (uint32_t i = 1; i < mipLevels; ++i) {
-        vk::ImageBlit imageBlit({vk::ImageAspectFlagBits::eColor, i - 1, 0, 1},
+        vk::ImageBlit imageBlit({vk::ImageAspectFlagBits::eColor, i - 1, 0, layers},
                                 {{{}, {int32_t(extent.width >> (i - 1)), int32_t(extent.height >> (i - 1)), 1}}},
-                                {vk::ImageAspectFlagBits::eColor, i, 0, 1},
+                                {vk::ImageAspectFlagBits::eColor, i, 0, layers},
                                 {{{}, {int32_t(extent.width >> i), int32_t(extent.height >> i), 1}}});
         setImageLayout(commandBuffer, texture.image, format,
                        needStaging ? vk::ImageLayout::eUndefined : vk::ImageLayout::ePreinitialized,
-                       vk::ImageLayout::eTransferDstOptimal, i);
+                       vk::ImageLayout::eTransferDstOptimal, i, layers);
         commandBuffer.blitImage(texture.image, vk::ImageLayout::eTransferSrcOptimal, texture.image,
                                 vk::ImageLayout::eTransferDstOptimal, imageBlit, vk::Filter::eLinear);
         setImageLayout(commandBuffer, texture.image, format, vk::ImageLayout::eTransferDstOptimal,
-                       vk::ImageLayout::eTransferSrcOptimal, i);
+                       vk::ImageLayout::eTransferSrcOptimal, i, layers);
     }
     setImageLayout(commandBuffer, texture.image, format, vk::ImageLayout::eTransferSrcOptimal,
-                   vk::ImageLayout::eShaderReadOnlyOptimal, 0, mipLevels);
+                   vk::ImageLayout::eShaderReadOnlyOptimal, 0, layers, mipLevels);
     commandBuffer.end();
 
     vk::Fence fence = device.createFence({});
@@ -322,8 +328,9 @@ Vulkan::Texture Vulkan::createTexture(vk::Extent2D extent, const void* data, boo
         vk::BorderColor::eFloatOpaqueBlack);
     texture.sampler = device.createSampler(samplerCreateInfo);
 
-    vk::ImageViewCreateInfo imageViewCreateInfo({}, texture.image, vk::ImageViewType::e2D, format, {},
-                                                {vk::ImageAspectFlagBits::eColor, 0, mipLevels, 0, 1});
+    vk::ImageViewCreateInfo imageViewCreateInfo({}, texture.image,
+                                                layers == 1 ? vk::ImageViewType::e2D : vk::ImageViewType::e2DArray,
+                                                format, {}, {vk::ImageAspectFlagBits::eColor, 0, mipLevels, 0, layers});
     texture.view = device.createImageView(imageViewCreateInfo);
 
     return texture;
@@ -720,8 +727,8 @@ std::pair<vk::Buffer, VmaAllocation> Vulkan::createBuffer(vk::DeviceSize bufferS
 
 std::pair<vk::Image, VmaAllocation> Vulkan::createImage(vk::Extent2D extent, vk::Format format, vk::ImageTiling tiling,
                                                         vk::ImageUsageFlags usage, vk::ImageLayout layout,
-                                                        uint32_t mipLevels) {
-    vk::ImageCreateInfo imageCreateInfo({}, vk::ImageType::e2D, format, vk::Extent3D(extent, 1), mipLevels, 1,
+                                                        uint32_t mipLevels, uint32_t layers) {
+    vk::ImageCreateInfo imageCreateInfo({}, vk::ImageType::e2D, format, vk::Extent3D(extent, 1), mipLevels, layers,
                                         vk::SampleCountFlagBits::e1, tiling, usage, vk::SharingMode::eExclusive, {},
                                         layout);
 
@@ -742,7 +749,7 @@ std::pair<vk::Image, VmaAllocation> Vulkan::createImage(vk::Extent2D extent, vk:
 
 void Vulkan::setImageLayout(const vk::CommandBuffer& commandBuffer, vk::Image image, vk::Format format,
                             vk::ImageLayout oldLayout, vk::ImageLayout newLayout, uint32_t mipLevel,
-                            uint32_t mipCount) {
+                            uint32_t layerCount, uint32_t mipCount) {
     vk::AccessFlags sourceAccessMask;
     switch (oldLayout) {
         case vk::ImageLayout::eTransferDstOptimal:
@@ -844,6 +851,6 @@ void Vulkan::setImageLayout(const vk::CommandBuffer& commandBuffer, vk::Image im
 
     vk::ImageMemoryBarrier imageMemoryBarrier(sourceAccessMask, destinationAccessMask, oldLayout, newLayout,
                                               vk::QueueFamilyIgnored, vk::QueueFamilyIgnored, image,
-                                              {aspectMask, mipLevel, mipCount, 0, 1});
+                                              {aspectMask, mipLevel, mipCount, 0, layerCount});
     commandBuffer.pipelineBarrier(sourceStage, destinationStage, {}, nullptr, nullptr, imageMemoryBarrier);
 }

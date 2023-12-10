@@ -7,6 +7,7 @@
 struct Engine;
 
 struct Shader {
+    Shader() = default;
     Shader(const std::string &name, Engine *engine);
     ~Shader();
 
@@ -33,7 +34,7 @@ struct Shader {
         vertex = vulkan->createVertexBuffer(data);
     }
 
-    void write_texture(int binding, const std::string &filename);
+    void write_texture(int binding, const std::string &filename, uint32_t layers = 1);
 
     Vulkan::Buffer vertex;
     std::vector<vk::Format> vert_formats;

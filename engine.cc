@@ -1,37 +1,31 @@
 #include "engine.h"
 
-Engine::Engine() : player(this) {
+Engine::Engine() : player(this), scene(this) {
     glfwInit();
 
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    window = glfwCreateWindow(WIN_WIDTH, WIN_HEIGHT, "VulkanEngine", nullptr, nullptr);
+}
+
+Engine::~Engine() {
+    glfwDestroyWindow(window);
+    glfwTerminate();
+}
+
+void Engine::init() {
     uint32_t count;
     const char** extensions = glfwGetRequiredInstanceExtensions(&count);
     if (!extensions) throw std::runtime_error("GLFW cannot create Vulkan window surfaces!");
 
     vulkan.setInstanceExtensions({count, extensions});
-
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    window = glfwCreateWindow(WIN_WIDTH, WIN_HEIGHT, "VulkanEngine", nullptr, nullptr);
-
+    vulkan.setBackgroudColor({BG_COLOR.r, BG_COLOR.g, BG_COLOR.b, 1.0f});
     vulkan.init({WIN_WIDTH, WIN_HEIGHT}, [this](const vk::Instance& instance) {
         VkSurfaceKHR surfaceKHR = VK_NULL_HANDLE;
         glfwCreateWindowSurface(instance, window, nullptr, &surfaceKHR);
         return surfaceKHR;
     });
 
-    meshes.push_back(std::make_unique<WaterMesh>(this));
-    meshes.push_back(std::make_unique<CloudMesh>(this));
-
-    for (auto& mesh : meshes) mesh->init();
-
-    glslang::InitializeProcess();
-    for (auto& mesh : meshes) mesh->load();
-    glslang::FinalizeProcess();
-
-    for (auto& mesh : meshes)
-        vulkan.attachShader(mesh->vert_shader, mesh->frag_shader, mesh->vertex, mesh->vert_formats, mesh->uniforms,
-                            mesh->textures, mesh->cull_mode);
-
-    vulkan.setBackgroudColor({BG_COLOR.r, BG_COLOR.g, BG_COLOR.b, 1.0f});
+    scene.init();
 
     glfwSetWindowUserPointer(window, this);
     glfwSetMouseButtonCallback(window, [](GLFWwindow* window, int button, int action, int mods) {
@@ -71,11 +65,6 @@ Engine::Engine() : player(this) {
     });
 }
 
-Engine::~Engine() {
-    glfwDestroyWindow(window);
-    glfwTerminate();
-}
-
 void Engine::run() {
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
@@ -93,7 +82,7 @@ void Engine::update() {
     glfwSetWindowTitle(window, std::to_string(fps).c_str());
 
     player.update();
-    for (auto& mesh : meshes) mesh->update();
+    scene.update();
 
     dx = dy = 0;
 }
@@ -117,3 +106,5 @@ void Engine::render() {
 }
 
 void Engine::handle_events() { player.handle_events(); }
+
+void Engine::add_mesh(std::unique_ptr<Shader> mesh) { scene.add_mesh(std::move(mesh)); }

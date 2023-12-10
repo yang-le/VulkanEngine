@@ -1,5 +1,9 @@
 #version 450
 
+#extension GL_GOOGLE_include_directive : enable
+
+#include "constants.h"
+
 layout(location = 0) in vec3 in_position;
 layout(location = 1) in vec2 in_tex_coord;
 
@@ -10,9 +14,6 @@ layout(binding = 1) uniform m_view_t { mat4 m_view; };
 
 
 void main() {
-    const int water_area = 4800;
-    const float water_line = 5.6;
-
     vec3 pos = in_position;
     pos.xz *= water_area;
     pos.xz -= 0.33 * water_area;

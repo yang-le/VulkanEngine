@@ -13,13 +13,13 @@ void Scene::init() {
     for (auto& mesh : meshes) mesh->load();
     glslang::FinalizeProcess();
 
-    for (auto& mesh : meshes)
-        vulkan->attachShader(mesh->vert_shader, mesh->frag_shader, mesh->vertex, mesh->vert_formats, mesh->uniforms,
-                             mesh->textures, mesh->cull_mode);
     for (auto& mesh : world->chunks)
         if (!mesh->empty)
             vulkan->attachShader(mesh->vert_shader, mesh->frag_shader, mesh->vertex, mesh->vert_formats, mesh->uniforms,
                                  mesh->textures, mesh->cull_mode);
+    for (auto& mesh : meshes)
+        vulkan->attachShader(mesh->vert_shader, mesh->frag_shader, mesh->vertex, mesh->vert_formats, mesh->uniforms,
+                             mesh->textures, mesh->cull_mode);
 }
 
 void Scene::update() {

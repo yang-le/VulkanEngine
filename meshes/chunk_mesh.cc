@@ -83,8 +83,8 @@ bool is_void(int x, int y, int z, int wx, int wy, int wz,
     if (chunk_index == -1) return false;
 
     auto& chunk_voxels = world_voxels[chunk_index];
-    int voxel_index = x % CHUNK_SIZE + z % CHUNK_SIZE * CHUNK_SIZE + y % CHUNK_SIZE * CHUNK_AREA;
-    if (voxel_index < 0) voxel_index += chunk_voxels.size();
+    int voxel_index = (x + CHUNK_SIZE) % CHUNK_SIZE + (z + CHUNK_SIZE) % CHUNK_SIZE * CHUNK_SIZE +
+                      (y + CHUNK_SIZE) % CHUNK_SIZE * CHUNK_AREA;
     if (chunk_voxels[voxel_index]) return false;
 
     return true;

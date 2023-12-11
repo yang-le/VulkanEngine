@@ -639,7 +639,7 @@ void Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::
                                                                                 vk::CompareOp::eLessOrEqual);
 
     vk::PipelineColorBlendAttachmentState pipelineColorBlendAttachmentState(
-        false, vk::BlendFactor::eZero, vk::BlendFactor::eZero, vk::BlendOp::eAdd, vk::BlendFactor::eZero,
+        true, vk::BlendFactor::eSrcAlpha, vk::BlendFactor::eOneMinusSrcAlpha, vk::BlendOp::eAdd, vk::BlendFactor::eOne,
         vk::BlendFactor::eZero, vk::BlendOp::eAdd,
         vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB |
             vk::ColorComponentFlagBits::eA);

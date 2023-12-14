@@ -189,7 +189,11 @@ void ChunkMesh::init() {
     Shader::init();
 
     write_uniform(2, model);
-    write_texture(3, "tex_array_0.png", 8);
+}
+
+void ChunkMesh::attach() {
+    draw_id = vulkan->attachShader(world->vert_shader, world->frag_shader, vertex, vert_formats, uniforms,
+                                   world->textures, cull_mode);
 }
 
 ChunkMesh::Voxels ChunkMesh::build_voxels() {

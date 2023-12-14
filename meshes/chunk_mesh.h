@@ -8,6 +8,7 @@ struct ChunkMesh : Shader {
     ChunkMesh(World* engine, glm::vec3 pos);
 
     virtual void init() override;
+    virtual void attach() override;
 
     using Vertex = uint32_t;
     using Voxels = std::array<uint8_t, CHUNK_VOL>;

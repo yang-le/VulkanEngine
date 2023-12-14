@@ -161,17 +161,17 @@ void Vulkan::init(vk::Extent2D extent, std::function<vk::SurfaceKHR(const vk::In
     frame.init(device, commandPool);
 };
 
-void Vulkan::attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
-                          const Buffer& vertex, const std::vector<vk::Format>& vertexFormats,
-                          const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures,
-                          vk::CullModeFlags cullMode) {
+size_t Vulkan::attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
+                            const Buffer& vertex, const std::vector<vk::Format>& vertexFormats,
+                            const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures,
+                            vk::CullModeFlags cullMode) {
     vertexBuffers.push_back(vertex);
 
     initDescriptorSet(uniforms, textures);
-    initPipeline(vertexShaderModule, fragmentShaderModule, vertex.stride, vertexFormats, cullMode);
+    return initPipeline(vertexShaderModule, fragmentShaderModule, vertex.stride, vertexFormats, cullMode);
 }
 
-void Vulkan::draw() {
+unsigned int Vulkan::renderBegin() {
     device.waitForFences(frame.drawFence(), vk::True, std::numeric_limits<uint64_t>::max());
 
     auto currentBuffer =
@@ -196,13 +196,19 @@ void Vulkan::draw() {
     frame.commandBuffer().beginRenderPass(renderPassBeginInfo, vk::SubpassContents::eInline);
     frame.commandBuffer().setViewport(0, vk::Viewport(0, 0, imageExtent.width, imageExtent.height, 0, 1));
     frame.commandBuffer().setScissor(0, vk::Rect2D({0, 0}, imageExtent));
-    for (size_t i = 0; i < graphicsPipelines.size(); ++i) {
-        frame.commandBuffer().bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipelines[i]);
-        frame.commandBuffer().bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayouts[i], 0,
-                                                 descriptorSets[i], nullptr);
-        frame.commandBuffer().bindVertexBuffers(0, vertexBuffers[i].buffer, {0});
-        frame.commandBuffer().draw(vertexBuffers[i].size / vertexBuffers[i].stride, 1, 0, 0);
-    }
+
+    return currentBuffer.value;
+}
+
+void Vulkan::draw(size_t i) {
+    frame.commandBuffer().bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipelines[i]);
+    frame.commandBuffer().bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayouts[i], 0, descriptorSets[i],
+                                             nullptr);
+    frame.commandBuffer().bindVertexBuffers(0, vertexBuffers[i].buffer, {0});
+    frame.commandBuffer().draw(vertexBuffers[i].size / vertexBuffers[i].stride, 1, 0, 0);
+}
+
+void Vulkan::renderEnd(unsigned int currentBuffer) {
     frame.commandBuffer().endRenderPass();
     frame.commandBuffer().end();
 
@@ -211,7 +217,7 @@ void Vulkan::draw() {
                                         frame.imageRenderedSemaphore()),
                          frame.drawFence());
 
-    auto result = presentationQueue.presentKHR({frame.imageRenderedSemaphore(), swapChain, currentBuffer.value});
+    auto result = presentationQueue.presentKHR({frame.imageRenderedSemaphore(), swapChain, currentBuffer});
     if (result == vk::Result::eErrorOutOfDateKHR || result == vk::Result::eSuboptimalKHR) {
         throw std::runtime_error("resize");
     } else if (result != vk::Result::eSuccess) {
@@ -219,6 +225,12 @@ void Vulkan::draw() {
     }
 
     frame.next();
+}
+
+void Vulkan::render() {
+    auto currentBuffer = renderBegin();
+    for (size_t i = 0; i < graphicsPipelines.size(); ++i) draw(i);
+    renderEnd(currentBuffer);
 }
 
 void Vulkan::resize(vk::Extent2D extent) {
@@ -611,6 +623,7 @@ void Vulkan::initFrameBuffers() {
 
     vk::FramebufferCreateInfo framebufferCreateInfo({}, renderPass, attachments, imageExtent.width, imageExtent.height,
                                                     1);
+
     framebuffers.reserve(swapChainImageViews.size());
     for (auto const& imageView : swapChainImageViews) {
         attachments[0] = imageView;
@@ -618,9 +631,9 @@ void Vulkan::initFrameBuffers() {
     }
 }
 
-void Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
-                          uint32_t vertexStride, const std::vector<vk::Format>& vertexFormats,
-                          vk::CullModeFlags cullMode, bool depthBuffered) {
+size_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
+                            uint32_t vertexStride, const std::vector<vk::Format>& vertexFormats,
+                            vk::CullModeFlags cullMode, bool depthBuffered) {
     std::array<vk::PipelineShaderStageCreateInfo, 2> pipelineShaderStageCreateInfos = {
         vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eVertex, vertexShaderModule, "main"),
         vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eFragment, fragmentShaderModule, "main")};
@@ -680,6 +693,7 @@ void Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::
     assert(result == vk::Result::eSuccess);
 
     graphicsPipelines.push_back(pipeline);
+    return graphicsPipelines.size() - 1;
 }
 
 void Vulkan::destroySwapChain() {

@@ -32,8 +32,6 @@ Shader::~Shader() {
     vulkan->destroyVertexBuffer(vertex);
     for (auto& uniform : uniforms) vulkan->destroyUniformBuffer(uniform.second);
     for (auto& texture : textures) vulkan->destroyTexture(texture.second);
-    vulkan->destroyShaderModule(frag_shader);
-    vulkan->destroyShaderModule(vert_shader);
 }
 
 void Shader::init() {
@@ -51,6 +49,14 @@ void Shader::load() {
     frag_shader = vulkan->createShaderModule(vk::ShaderStageFlagBits::eFragment,
                                              readFile("shaders/" + shader_name + ".frag").data());
 }
+
+void Shader::attach() {
+    draw_id = vulkan->attachShader(vert_shader, frag_shader, vertex, vert_formats, uniforms, textures, cull_mode);
+    vulkan->destroyShaderModule(frag_shader);
+    vulkan->destroyShaderModule(vert_shader);
+}
+
+void Shader::draw() { vulkan->draw(draw_id); }
 
 void Shader::write_texture(int binding, const std::string& filename, uint32_t layers) {
     auto& texture = textures[binding];

@@ -50,10 +50,14 @@ class Vulkan {
 
     void init(vk::Extent2D extent, std::function<vk::SurfaceKHR(const vk::Instance&)> getSurfaceKHR,
               std::function<bool(const vk::PhysicalDevice&)> pickDevice = {});
-    void attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule, const Buffer& vertex,
-                      const std::vector<vk::Format>& vertexFormats, const std::map<int, Buffer>& uniforms,
-                      const std::map<int, Texture>& textures, vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack);
-    void draw();
+    size_t attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
+                        const Buffer& vertex, const std::vector<vk::Format>& vertexFormats,
+                        const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures,
+                        vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack);
+    unsigned int renderBegin();
+    void draw(size_t i);
+    void renderEnd(unsigned int currentBuffer);
+    void render();
     void resize(vk::Extent2D extent);
 
     Buffer createUniformBuffer(vk::DeviceSize size);
@@ -78,9 +82,9 @@ class Vulkan {
     void initRenderPass();
     void initFrameBuffers();
     void initDescriptorSet(const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures);
-    void initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
-                      uint32_t vertexStride, const std::vector<vk::Format>& vertexFormats, vk::CullModeFlags cullMode,
-                      bool depthBuffered = true);
+    size_t initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
+                        uint32_t vertexStride, const std::vector<vk::Format>& vertexFormats, vk::CullModeFlags cullMode,
+                        bool depthBuffered = true);
     void destroySwapChain();
 
     //

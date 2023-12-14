@@ -3,12 +3,13 @@
 #include "meshes/chunk_mesh.h"
 
 struct Engine;
-struct World {
+struct World : Shader {
     World(Engine* engine);
 
-    void init();
-    void update();
-    void load();
+    virtual void init() override;
+    virtual void update() override;
+    virtual void attach() override;
+    virtual void draw() override;
 
     Engine* engine;
     // can we sparse this?

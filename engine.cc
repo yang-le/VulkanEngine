@@ -89,7 +89,9 @@ void Engine::update() {
 
 void Engine::render() {
     try {
-        vulkan.draw();
+        auto currentBuffer = vulkan.renderBegin();
+        scene.draw();
+        vulkan.renderEnd(currentBuffer);
     } catch (std::runtime_error e) {
         if (!strcmp(e.what(), "resize")) {
             int width = 0, height = 0;

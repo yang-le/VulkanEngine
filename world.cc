@@ -2,7 +2,7 @@
 
 #include "engine.h"
 
-World::World(Engine* engine) : engine(engine) {
+World::World(Engine* engine) : engine(engine), Shader("chunk", engine) {
 #ifdef _DEBUG
 #pragma omp parallel for
 #endif
@@ -32,14 +32,20 @@ void World::init() {
             chunk->build_mesh();
         }
 #endif
+    write_texture(3, "tex_array_0.png", 8);
 }
 
 void World::update() {
     for (auto& chunk : chunks)
-        if (!chunk->empty /*&& chunk->is_on_frustum(engine->player) */) chunk->update();
+        if (!chunk->empty && chunk->is_on_frustum(engine->player)) chunk->update();
 }
 
-void World::load() {
+void World::attach() {
     for (auto& chunk : chunks)
-        if (!chunk->empty) chunk->load();
+        if (!chunk->empty) chunk->attach();
+}
+
+void World::draw() {
+    for (auto& chunk : chunks)
+        if (!chunk->empty && chunk->is_on_frustum(engine->player)) chunk->draw();
 }

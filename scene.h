@@ -1,7 +1,6 @@
 #pragma once
 
 #include "shader.h"
-#include "world.h"
 
 class Engine;
 
@@ -10,11 +9,11 @@ struct Scene {
 
     void init();
     void update();
+    void draw();
 
     void add_mesh(std::unique_ptr<Shader> shader);
 
     std::vector<std::unique_ptr<Shader>> meshes;
-    std::unique_ptr<World> world;
-    Engine* engie;
+    Engine* engine;
     Vulkan* vulkan;
 };

@@ -38,11 +38,13 @@ struct Engine;
 struct Shader {
     Shader() = default;
     Shader(const std::string &name, Engine *engine);
-    ~Shader();
+    virtual ~Shader();
 
     virtual void init();
     virtual void update();
     void load();
+    virtual void attach();
+    virtual void draw();
 
     template <typename T>
     void write_uniform(int binding, const T &data, vk::ShaderStageFlags stage = {}) {
@@ -73,6 +75,7 @@ struct Shader {
     vk::ShaderModule frag_shader = {};
     std::string shader_name;
     vk::CullModeFlags cull_mode = vk::CullModeFlagBits::eBack;
+    size_t draw_id;
 
     Engine *engine;
     Vulkan *vulkan;

@@ -13,9 +13,10 @@ World::World(Engine* engine) : engine(engine), Shader("chunk", engine) {
                 int chunk_index = x + WORLD_W * z + WORLD_AREA * y;
 
                 voxels[chunk_index] = chunk->build_voxels();
-                chunk->voxels = &voxels[chunk_index];
+                chunk->voxels = voxels[chunk_index].get();
                 chunks[chunk_index] = std::move(chunk);
             }
+    voxel_handler = std::make_unique<VoxelMarkerMesh>(this);
 }
 
 void World::init() {
@@ -33,19 +34,28 @@ void World::init() {
         }
 #endif
     write_texture(3, "tex_array_0.png", 8);
+    voxel_handler->init();
 }
 
 void World::update() {
     for (auto& chunk : chunks)
         if (!chunk->empty && chunk->is_on_frustum(engine->player)) chunk->update();
+    voxel_handler->update();
+}
+
+void World::load() {
+    Shader::load();
+    voxel_handler->load();
 }
 
 void World::attach() {
     for (auto& chunk : chunks)
         if (!chunk->empty) chunk->attach();
+    voxel_handler->attach();
 }
 
 void World::draw() {
     for (auto& chunk : chunks)
         if (!chunk->empty && chunk->is_on_frustum(engine->player)) chunk->draw();
+    voxel_handler->draw();
 }

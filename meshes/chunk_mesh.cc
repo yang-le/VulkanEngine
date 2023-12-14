@@ -113,20 +113,21 @@ inline int get_chunk_index(int wx, int wy, int wz) {
 }
 
 bool is_void(int x, int y, int z, int wx, int wy, int wz,
-             const std::array<ChunkMesh::Voxels, WORLD_VOL>& world_voxels) {
+             const std::array<std::unique_ptr<ChunkMesh::Voxels>, WORLD_VOL>& world_voxels) {
     int chunk_index = get_chunk_index(wx, wy, wz);
     if (chunk_index == -1) return false;
 
     auto& chunk_voxels = world_voxels[chunk_index];
     int voxel_index = (x + CHUNK_SIZE) % CHUNK_SIZE + (z + CHUNK_SIZE) % CHUNK_SIZE * CHUNK_SIZE +
                       (y + CHUNK_SIZE) % CHUNK_SIZE * CHUNK_AREA;
-    if (chunk_voxels[voxel_index]) return false;
+    if (chunk_voxels->at(voxel_index)) return false;
 
     return true;
 }
 
 std::array<uint8_t, 4> get_ao(int x, int y, int z, int wx, int wy, int wz,
-                              const std::array<ChunkMesh::Voxels, WORLD_VOL>& world_voxels, char plane) {
+                              const std::array<std::unique_ptr<ChunkMesh::Voxels>, WORLD_VOL>& world_voxels,
+                              char plane) {
     uint8_t a, b, c, d, e, f, g, h;
     if (plane == 'Y') {
         a = is_void(x, y, z - 1, wx, wy, wz - 1, world_voxels);
@@ -178,7 +179,7 @@ inline void add_data(std::vector<ChunkMesh::Vertex>& vertex_data, std::initializ
 }
 }  // namespace
 
-ChunkMesh::ChunkMesh(World* world, glm::vec3 pos) : world(world), Shader("chunk", world->engine), position(pos) {
+ChunkMesh::ChunkMesh(World* world, glm::vec3 pos) : Shader("chunk", world->engine), world(world), position(pos) {
     model = glm::translate(glm::mat4(1), position * (float)CHUNK_SIZE);
     center = (position + 0.5f) * (float)CHUNK_SIZE;
 
@@ -196,8 +197,8 @@ void ChunkMesh::attach() {
                                    world->textures, cull_mode);
 }
 
-ChunkMesh::Voxels ChunkMesh::build_voxels() {
-    Voxels voxels = {0};
+std::unique_ptr<ChunkMesh::Voxels> ChunkMesh::build_voxels() {
+    std::unique_ptr<Voxels> voxels = std::make_unique<Voxels>();
 
     auto chunk_pos = glm::ivec3(position) * CHUNK_SIZE;
     for (int x = 0; x < CHUNK_SIZE; ++x)
@@ -209,11 +210,11 @@ ChunkMesh::Voxels ChunkMesh::build_voxels() {
 
             for (int y = 0; y < local_height; ++y) {
                 int wy = y + chunk_pos.y;
-                set_voxel_id(voxels, x, y, z, wx, wy, wz, world_height);
+                set_voxel_id(*voxels, x, y, z, wx, wy, wz, world_height);
             }
         }
 
-    empty = !std::any_of(voxels.begin(), voxels.end(), [](uint8_t id) { return id != 0; });
+    empty = !std::any_of(voxels->begin(), voxels->end(), [](uint8_t id) { return id != 0; });
 
     return voxels;
 }

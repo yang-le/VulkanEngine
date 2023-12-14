@@ -17,20 +17,20 @@ constexpr decltype(auto) get_data(const std::array<std::tuple<T...>, verSize> &v
     return get_data(vertices, indices, std::make_index_sequence<indSize>{});
 }
 
-template <size_t I, typename... Tuples, size_t Size>
-constexpr decltype(auto) hstack_helper(const std::array<Tuples, Size>... arrays) {
-    return std::tuple_cat(arrays[I]...);
+template <typename Ret, size_t I, typename... Tuples, size_t Size, size_t... J>
+constexpr Ret hstack_helper(std::index_sequence<J...>, const std::array<Tuples, Size>... arrays) {
+    return {std::get<J>(std::tuple_cat(arrays[I]...))...};
 }
 
-template <typename... Tuples, size_t Size, size_t... I>
-constexpr std::array<decltype(std::tuple_cat(Tuples{}...)), Size> hstack_helper(
-    std::index_sequence<I...>, const std::array<Tuples, Size>... arrays) {
-    return {hstack_helper<I>(arrays...)...};
+template <typename Ret, size_t... I, typename... Tuples, size_t Size>
+constexpr std::array<Ret, Size> hstack(std::index_sequence<I...>, const std::array<Tuples, Size>... arrays) {
+    constexpr size_t TupleSize = std::tuple_size_v<decltype(std::tuple_cat(arrays[0]...))>;
+    return {hstack_helper<Ret, I>(std::make_index_sequence<TupleSize>{}, arrays...)...};
 }
 
-template <typename... Tuples, size_t Size>
-constexpr decltype(auto) hstack(const std::array<Tuples, Size>... arrays) {
-    return hstack_helper(std::make_index_sequence<Size>{}, arrays...);
+template <typename Ret, typename... Tuples, size_t Size>
+constexpr std::array<Ret, Size> hstack(const std::array<Tuples, Size>... arrays) {
+    return hstack<Ret>(std::make_index_sequence<Size>{}, arrays...);
 }
 
 struct Engine;
@@ -42,7 +42,7 @@ struct Shader {
 
     virtual void init();
     virtual void update();
-    void load();
+    virtual void load();
     virtual void attach();
     virtual void draw();
 

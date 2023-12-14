@@ -32,10 +32,8 @@ void Engine::init() {
         if (glfwGetWindowAttrib(window, GLFW_HOVERED) &&
             glfwGetInputMode(window, GLFW_CURSOR) != GLFW_CURSOR_DISABLED && button == GLFW_MOUSE_BUTTON_LEFT &&
             action == GLFW_PRESS) {
-            if (glfwRawMouseMotionSupported()) {
-                glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-                glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
-            }
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+            if (glfwRawMouseMotionSupported()) glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
             glfwSetKeyCallback(window, [](GLFWwindow* window, int key, int scancode, int action, int mods) {
                 Engine* self = (Engine*)glfwGetWindowUserPointer(window);
 
@@ -61,6 +59,9 @@ void Engine::init() {
                 self->dx += self->x - prev_x;
                 self->dy += self->y - prev_y;
             });
+        } else if (glfwGetInputMode(window, GLFW_CURSOR) == GLFW_CURSOR_DISABLED) {
+            Engine* self = (Engine*)glfwGetWindowUserPointer(window);
+            self->handle_events(button, action);
         }
     });
 }
@@ -68,7 +69,6 @@ void Engine::init() {
 void Engine::run() {
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
-        handle_events();
         update();
         render();
     }
@@ -107,6 +107,6 @@ void Engine::render() {
     };
 }
 
-void Engine::handle_events() { player.handle_events(); }
+void Engine::handle_events(int button, int action) { player.handle_events(button, action); }
 
 void Engine::add_mesh(std::unique_ptr<Shader> mesh) { scene.add_mesh(std::move(mesh)); }

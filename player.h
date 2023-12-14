@@ -14,7 +14,7 @@ struct Player : Camera {
         Camera::update();
     }
 
-    void handle_events();
+    void handle_events(int button, int action);
     void mouse_control();
     void keyboard_control();
 

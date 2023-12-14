@@ -18,7 +18,7 @@ struct Engine {
     void run();
     void update();
     void render();
-    void handle_events();
+    void handle_events(int button, int action);
     void add_mesh(std::unique_ptr<Shader> mesh);
 
     Vulkan vulkan;

@@ -13,7 +13,7 @@ struct ChunkMesh : Shader {
     using Vertex = uint32_t;
     using Voxels = std::array<uint8_t, CHUNK_VOL>;
 
-    Voxels build_voxels();
+    std::unique_ptr<Voxels> build_voxels();
     void build_mesh();
     bool is_on_frustum(const Camera& camera);
 

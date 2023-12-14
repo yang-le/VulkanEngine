@@ -1,6 +1,7 @@
 #include "player.h"
 
 #include "engine.h"
+#include "world.h"
 
 void Player::keyboard_control() {
     auto velocity = PLAYER_SPEED * engine->dt * 1000;  // ms
@@ -12,9 +13,13 @@ void Player::keyboard_control() {
     if (engine->key_state[GLFW_KEY_E]) move_down(velocity);
 }
 
-void Player::handle_events() {
-    if (glfwGetMouseButton(engine->window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
-    } else if (glfwGetMouseButton(engine->window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
+void Player::handle_events(int button, int action) {
+    if (action == GLFW_PRESS) {
+        if (button == GLFW_MOUSE_BUTTON_LEFT) {
+            engine->scene.world->voxel_handler->set_voxel();
+        } else if (button == GLFW_MOUSE_BUTTON_RIGHT) {
+            engine->scene.world->voxel_handler->switch_mode();
+        }
     }
 }
 

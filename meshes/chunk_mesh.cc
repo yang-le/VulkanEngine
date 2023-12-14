@@ -33,6 +33,40 @@ int get_height(glm::vec2 pos) {
 
 inline int get_index(int x, int y, int z) { return x + CHUNK_SIZE * z + CHUNK_AREA * y; }
 
+void place_tree(std::array<uint8_t, CHUNK_VOL>& voxels, int x, int y, int z, int voxel_id) {
+    static std::random_device r;
+    static std::default_random_engine e(r());
+    static std::uniform_real_distribution<float> uniform_dist;
+
+    if (voxel_id != GRASS || uniform_dist(e) > TREE_PROBABILITY) return;
+    if (y + TREE_HEIGHT >= CHUNK_SIZE) return;
+    if (x - TREE_H_WIDTH < 0 || x + TREE_H_WIDTH >= CHUNK_SIZE) return;
+    if (z - TREE_H_WIDTH < 0 || z + TREE_H_WIDTH >= CHUNK_SIZE) return;
+
+    // dirt under the tree
+    voxels[get_index(x, y, z)] = DIRT;
+
+    // leaves
+    int m = 0;
+    for (int iy = TREE_H_HEIGHT; iy < TREE_HEIGHT - 1; ++iy) {
+        static std::uniform_real_distribution<float> uniform_dist(0, 2);
+
+        int k = iy % 2;
+        int rng = uniform_dist(e);
+        for (int ix = -TREE_H_WIDTH + m; ix < TREE_H_WIDTH - m * rng; ++ix)
+            for (int iz = -TREE_H_WIDTH + m * rng; iz < TREE_H_WIDTH - m; ++iz)
+                if ((ix + iz) % 4) voxels[get_index(x + ix + k, y + iy, z + iz + k)] = LEAVES;
+        int n = iy - TREE_H_HEIGHT;
+        m += n > 1 ? 3 : n > 0 ? 1 : 0;
+    }
+
+    // tree trunk
+    for (int iy = 1; iy < TREE_HEIGHT - 2; ++iy) voxels[get_index(x, y + iy, z)] = WOOD;
+
+    // top
+    voxels[get_index(x, y + TREE_HEIGHT - 2, z)] = LEAVES;
+}
+
 void set_voxel_id(std::array<uint8_t, CHUNK_VOL>& voxels, int x, int y, int z, int wx, int wy, int wz,
                   int world_height) {
     int voxel_id = 0;
@@ -49,7 +83,7 @@ void set_voxel_id(std::array<uint8_t, CHUNK_VOL>& voxels, int x, int y, int z, i
         static std::default_random_engine e(r());
         static std::uniform_real_distribution<float> uniform_dist(0, 7);
 
-        float ry = wy - uniform_dist(e);
+        int ry = wy - (int)uniform_dist(e);
         if (SNOW_LVL <= ry && ry < world_height)
             voxel_id = SNOW;
         else if (STONE_LVL <= ry && ry < SNOW_LVL)
@@ -66,6 +100,7 @@ void set_voxel_id(std::array<uint8_t, CHUNK_VOL>& voxels, int x, int y, int z, i
     voxels[get_index(x, y, z)] = voxel_id;
 
     // place tree
+    if (wy < DIRT_LVL) place_tree(voxels, x, y, z, voxel_id);
 }
 
 inline int get_chunk_index(int wx, int wy, int wz) {

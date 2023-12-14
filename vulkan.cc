@@ -248,6 +248,22 @@ void Vulkan::destroyUniformBuffer(const Buffer& buffer) {
     }
 }
 
+Vulkan::Buffer Vulkan::createVertexBuffer(const void* vertices, size_t stride, size_t size) {
+    Buffer buffer;
+    buffer.stride = stride;
+    buffer.size = stride * size;
+
+    std::tie(buffer.buffer, buffer.memory) =
+        createBuffer(buffer.size, vk::BufferUsageFlagBits::eVertexBuffer,
+                     vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+
+    vmaMapMemory(vmaAllocator, buffer.memory, &buffer.data);
+    memcpy(buffer.data, vertices, buffer.size);
+    vmaUnmapMemory(vmaAllocator, buffer.memory);
+
+    return buffer;
+}
+
 void Vulkan::destroyVertexBuffer(const Buffer& buffer) {
     if (buffer.size) vmaDestroyBuffer(vmaAllocator, buffer.buffer, buffer.memory);
 }

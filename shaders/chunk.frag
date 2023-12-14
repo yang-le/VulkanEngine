@@ -6,9 +6,8 @@
 
 layout(location = 0) out vec4 fragColor;
 
-layout(binding = 3) uniform sampler2DArray u_texture_array_0;
+layout(binding = 3) uniform sampler2DArray u_texture_array;
 
-// in vec3 voxel_color;
 layout(location = 2) in vec2 uv;
 layout(location = 3) in float shading;
 layout(location = 4) in vec3 frag_world_pos;
@@ -21,7 +20,7 @@ void main() {
     vec2 face_uv = uv;
     face_uv.x = (min(face_id, 2) - uv.x) / 3.0;
 
-    vec3 tex_col = texture(u_texture_array_0, vec3(face_uv, voxel_id)).rgb;
+    vec3 tex_col = texture(u_texture_array, vec3(face_uv, voxel_id)).rgb;
     tex_col = pow(tex_col, gamma);
 
     tex_col *= shading;

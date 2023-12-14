@@ -10,8 +10,8 @@ WaterMesh::WaterMesh(Engine* engine) : Shader("water", engine) {
 void WaterMesh::init() {
     Shader::init();
 
-    Vertex data[] = {{0, 0, 0, 0, 0}, {1, 0, 1, 1, 1}, {1, 0, 0, 1, 0},
-                     {0, 0, 0, 0, 0}, {0, 0, 1, 0, 1}, {1, 0, 1, 1, 1}};
+    std::array<Vertex, 6> data = {Vertex{0, 0, 0, 0, 0}, {1, 0, 1, 1, 1}, {1, 0, 0, 1, 0},
+                                  {0, 0, 0, 0, 0},       {0, 0, 1, 0, 1}, {1, 0, 1, 1, 1}};
     write_vertex(data);
 
     write_texture(2, "water.png");

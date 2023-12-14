@@ -59,38 +59,7 @@ class Vulkan {
     Buffer createUniformBuffer(vk::DeviceSize size);
     void destroyUniformBuffer(const Buffer& buffer);
 
-    template <typename T, size_t Size>
-    Buffer createVertexBuffer(const T (&vertices)[Size]) {
-        Buffer buffer;
-        buffer.stride = sizeof(T);
-        buffer.size = sizeof(T) * Size;
-
-        std::tie(buffer.buffer, buffer.memory) =
-            createBuffer(buffer.size, vk::BufferUsageFlagBits::eVertexBuffer,
-                         vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
-
-        vmaMapMemory(vmaAllocator, buffer.memory, &buffer.data);
-        memcpy(buffer.data, vertices, buffer.size);
-        vmaUnmapMemory(vmaAllocator, buffer.memory);
-
-        return buffer;
-    }
-    template <typename T>
-    Buffer createVertexBuffer(const std::vector<T>& vertices) {
-        Buffer buffer;
-        buffer.stride = sizeof(T);
-        buffer.size = sizeof(T) * vertices.size();
-
-        std::tie(buffer.buffer, buffer.memory) =
-            createBuffer(buffer.size, vk::BufferUsageFlagBits::eVertexBuffer,
-                         vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
-
-        vmaMapMemory(vmaAllocator, buffer.memory, &buffer.data);
-        memcpy(buffer.data, vertices.data(), buffer.size);
-        vmaUnmapMemory(vmaAllocator, buffer.memory);
-
-        return buffer;
-    }
+    Buffer createVertexBuffer(const void* vertices, size_t stride, size_t size);
     void destroyVertexBuffer(const Buffer& buffer);
 
     Texture createTexture(vk::Extent2D extent, const void* data, uint32_t layers = 1, bool anisotropy = false);

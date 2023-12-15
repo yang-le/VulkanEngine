@@ -513,10 +513,11 @@ void Vulkan::initSwapChain(vk::Extent2D extent) {
                            ? vk::PresentModeKHR::eMailbox
                            : vk::PresentModeKHR::eFifo;
 
+    imageCount = clamp(3u, surfaceCaps.minImageCount, surfaceCaps.maxImageCount);
     vk::SwapchainCreateInfoKHR swapChainCreateInfo(
-        {}, surface, clamp(3u, surfaceCaps.minImageCount, surfaceCaps.maxImageCount), surfaceFormat.format,
-        surfaceFormat.colorSpace, imageExtent, 1, vk::ImageUsageFlagBits::eColorAttachment, vk::SharingMode::eExclusive,
-        graphicsQueueFamliyIndex, preTransform, compositeAlpha, presentMode, true);
+        {}, surface, imageCount, surfaceFormat.format, surfaceFormat.colorSpace, imageExtent, 1,
+        vk::ImageUsageFlagBits::eColorAttachment, vk::SharingMode::eExclusive, graphicsQueueFamliyIndex, preTransform,
+        compositeAlpha, presentMode, true);
 
     auto queueFamilyIndices = {graphicsQueueFamliyIndex, presentationQueueFamliyIndex};
     if (graphicsQueueFamliyIndex != presentationQueueFamliyIndex) {

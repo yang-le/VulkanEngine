@@ -11,6 +11,7 @@ find_package(OpenMP REQUIRED)
 if (OpenMP_CXX_FOUND)
     set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS})
 endif (OpenMP_CXX_FOUND)
+find_package(imgui CONFIG REQUIRED)
 
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
@@ -25,3 +26,4 @@ target_link_libraries(vulkan-engine PRIVATE glm::glm)
 target_link_libraries(vulkan-engine PRIVATE glslang::SPIRV glslang::glslang-default-resource-limits)
 target_link_libraries(vulkan-engine PRIVATE Vulkan::Headers)
 target_link_libraries(vulkan-engine PRIVATE GPUOpen::VulkanMemoryAllocator)
+target_link_libraries(vulkan-engine PRIVATE imgui::imgui)

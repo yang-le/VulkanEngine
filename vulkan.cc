@@ -1,6 +1,7 @@
 #define VMA_IMPLEMENTATION
 #include "vulkan.h"
 
+#include <iostream>
 #include <vulkan/vulkan_format_traits.hpp>
 
 #include "DirStackFileIncluder.h"
@@ -66,8 +67,8 @@ bool GLSLtoSPV(const vk::ShaderStageFlagBits shaderType, const std::string& glsl
     includer.pushExternalLocalDirectory("shaders");
 
     if (!shader.parse(GetDefaultResources(), 100, false, messages, includer)) {
-        puts(shader.getInfoLog());
-        puts(shader.getInfoDebugLog());
+        std::cerr << shader.getInfoLog();
+        std::cerr << shader.getInfoDebugLog();
         return false;
     }
 
@@ -79,8 +80,8 @@ bool GLSLtoSPV(const vk::ShaderStageFlagBits shaderType, const std::string& glsl
     //
 
     if (!program.link(messages)) {
-        puts(program.getInfoLog());
-        puts(program.getInfoDebugLog());
+        std::cerr << program.getInfoLog();
+        std::cerr << program.getInfoDebugLog();
         return false;
     }
 

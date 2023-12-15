@@ -1,6 +1,7 @@
 #include "shader.h"
 
 #include <fstream>
+#include <iostream>
 
 #include "engine.h"
 
@@ -11,7 +12,7 @@ namespace {
 std::vector<char> readFile(const std::string& filename) {
     std::ifstream file(filename, std::ios::binary | std::ios::ate);
     if (!file.is_open()) {
-        throw std::runtime_error("Failed to open a file!");
+        throw std::runtime_error("Failed to load file: " + filename);
     }
 
     auto fileSize = file.tellg();
@@ -44,10 +45,20 @@ void Shader::init() {
 void Shader::update() { write_uniform(1, player->view); }
 
 void Shader::load() {
-    vert_shader = vulkan->createShaderModule(vk::ShaderStageFlagBits::eVertex,
-                                             readFile("shaders/" + shader_name + ".vert").data());
-    frag_shader = vulkan->createShaderModule(vk::ShaderStageFlagBits::eFragment,
-                                             readFile("shaders/" + shader_name + ".frag").data());
+    try {
+        vert_shader = vulkan->createShaderModule(vk::ShaderStageFlagBits::eVertex,
+                                                 readFile("shaders/" + shader_name + ".vert").data());
+    } catch (const std::exception&) {
+        std::cerr << "When compiling file: shaders/" + shader_name + ".vert\n";
+        throw;
+    }
+    try {
+        frag_shader = vulkan->createShaderModule(vk::ShaderStageFlagBits::eFragment,
+                                                 readFile("shaders/" + shader_name + ".frag").data());
+    } catch (const std::exception&) {
+        std::cerr << "When compiling file: shaders/" + shader_name + ".frag\n";
+        throw;
+    }
 }
 
 void Shader::attach() {
@@ -64,7 +75,7 @@ void Shader::write_texture(int binding, const std::string& filename, uint32_t la
         int width, height;
         std::string path = "assets/" + filename;
         stbi_uc* image = stbi_load(path.c_str(), &width, &height, nullptr, STBI_rgb_alpha);
-        if (!image) throw std::runtime_error("Failed to load a Texture file! (" + filename + ")");
+        if (!image) throw std::runtime_error("Failed to load texture file: assets/" + filename);
 
         texture = vulkan->createTexture({(uint32_t)width, (uint32_t)height / layers}, image, layers);
         stbi_image_free(image);

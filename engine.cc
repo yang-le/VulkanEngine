@@ -1,5 +1,7 @@
 #include "engine.h"
 
+#include <iostream>
+
 Engine::Engine() : player(this), scene(this) {
     glfwInit();
 
@@ -92,7 +94,7 @@ void Engine::render() {
         auto currentBuffer = vulkan.renderBegin();
         scene.draw();
         vulkan.renderEnd(currentBuffer);
-    } catch (std::runtime_error e) {
+    } catch (const std::runtime_error& e) {
         if (!strcmp(e.what(), "resize")) {
             int width = 0, height = 0;
             glfwGetFramebufferSize(window, &width, &height);
@@ -102,7 +104,7 @@ void Engine::render() {
             }
             vulkan.resize({(uint32_t)width, (uint32_t)height});
         } else {
-            puts(e.what());
+            throw;
         }
     };
 }

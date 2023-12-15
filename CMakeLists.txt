@@ -25,3 +25,13 @@ target_link_libraries(vulkan-engine PRIVATE glm::glm)
 target_link_libraries(vulkan-engine PRIVATE glslang::SPIRV glslang::glslang-default-resource-limits)
 target_link_libraries(vulkan-engine PRIVATE Vulkan::Headers)
 target_link_libraries(vulkan-engine PRIVATE GPUOpen::VulkanMemoryAllocator)
+
+install(TARGETS vulkan-engine DESTINATION .)
+install(FILES build/vcpkg_installed/x64-windows/bin/glfw3.dll DESTINATION .)
+install(DIRECTORY assets DESTINATION .)
+install(DIRECTORY shaders DESTINATION .)
+
+set(CPACK_PACKAGE_NAME "MyCraft")
+set(CPACK_PACKAGE_VERSION "1.0.0")
+set(CPACK_GENERATOR "ZIP")
+include(CPack)

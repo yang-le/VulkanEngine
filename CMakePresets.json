@@ -20,6 +20,7 @@
             "generator": "Ninja",
             "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
             "binaryDir": "${sourceDir}/build/release",
+            "installDir": "${sourceDir}/build/install",
             "cacheVariables": {
                 "CMAKE_MAKE_PROGRAM": "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe",
                 "CMAKE_C_COMPILER": "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/Llvm/x64/bin/clang.exe",
@@ -27,6 +28,15 @@
                 "CMAKE_RC_COMPILER": "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/Llvm/x64/bin/clang.exe",
                 "CMAKE_BUILD_TYPE": "Release"
             }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "Package",
+            "configurePreset": "Release",
+            "targets": [
+                "package"
+            ]
         }
     ]
 }

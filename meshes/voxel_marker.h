@@ -17,7 +17,15 @@ struct VoxelMarkerMesh : Shader {
     void set_voxel();
     void switch_mode();
     bool ray_cast();
-    std::tuple<uint8_t, size_t, glm::ivec3, ChunkMesh*> get_voxel_info(glm::ivec3 voxel_world_pos);
+
+    struct VoxelInfo {
+        uint8_t id;
+        int index;
+        glm::ivec3 pos;
+        ChunkMesh* chunk;
+    };
+
+    VoxelInfo get_voxel_info(glm::ivec3 voxel_world_pos);
 
     struct Vertex {
         float x, y, z;

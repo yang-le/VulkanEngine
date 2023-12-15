@@ -19,20 +19,17 @@ World::World(Engine* engine) : engine(engine), Shader("chunk", engine) {
     voxel_handler = std::make_unique<VoxelMarkerMesh>(this);
 }
 
+World::~World() {
+    vulkan->destroyShaderModule(frag_shader);
+    vulkan->destroyShaderModule(vert_shader);
+}
+
 void World::init() {
 #ifdef _DEBUG
+#pragma omp parallel for
+#endif
     for (auto& chunk : chunks)
         if (!chunk->empty) chunk->init();
-#pragma omp parallel for
-    for (auto& chunk : chunks)
-        if (!chunk->empty) chunk->build_mesh();
-#else
-    for (auto& chunk : chunks)
-        if (!chunk->empty) {
-            chunk->init();
-            chunk->build_mesh();
-        }
-#endif
     write_texture(3, "tex_array_0.png", 8);
     voxel_handler->init();
 }

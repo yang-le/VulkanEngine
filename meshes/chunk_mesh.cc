@@ -115,7 +115,7 @@ inline int get_chunk_index(int wx, int wy, int wz) {
 bool is_void(int x, int y, int z, int wx, int wy, int wz,
              const std::array<std::unique_ptr<ChunkMesh::Voxels>, WORLD_VOL>& world_voxels) {
     int chunk_index = get_chunk_index(wx, wy, wz);
-    if (chunk_index == -1) return false;
+    if (chunk_index == -1) return true;
 
     auto& chunk_voxels = world_voxels[chunk_index];
     int voxel_index = (x + CHUNK_SIZE) % CHUNK_SIZE + (z + CHUNK_SIZE) % CHUNK_SIZE * CHUNK_SIZE +
@@ -189,6 +189,7 @@ ChunkMesh::ChunkMesh(World* world, glm::vec3 pos) : Shader("chunk", world->engin
 void ChunkMesh::init() {
     Shader::init();
 
+    write_vertex(build_mesh());
     write_uniform(2, model);
 }
 
@@ -219,7 +220,7 @@ std::unique_ptr<ChunkMesh::Voxels> ChunkMesh::build_voxels() {
     return voxels;
 }
 
-void ChunkMesh::build_mesh() {
+std::vector<ChunkMesh::Vertex> ChunkMesh::build_mesh() {
     std::vector<Vertex> mesh;
 
     // ARRAY_SIZE = CHUNK_VOL * NUM_VOXEL_VERTICES * VERTEX_ATTRS
@@ -337,8 +338,10 @@ void ChunkMesh::build_mesh() {
             }
 
     mesh.shrink_to_fit();
-    write_vertex(mesh);
+    return mesh;
 }
+
+void ChunkMesh::rebuild_mesh() { write_vertex(build_mesh()); }
 
 bool ChunkMesh::is_on_frustum(const Camera& camera) {
     // vector to sphere center

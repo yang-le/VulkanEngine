@@ -57,12 +57,16 @@ struct Shader {
 
     template <typename T, size_t Size>
     void write_vertex(const std::array<T, Size> &data) {
+        if (vertex.data) vulkan->destroyVertexBuffer(vertex);
         vertex = vulkan->createVertexBuffer(data.data(), sizeof(T), Size);
+        if (draw_id != -1) vulkan->updateVertex(draw_id, vertex);
     }
 
     template <typename T>
     void write_vertex(const std::vector<T> &data) {
+        if (vertex.data) vulkan->destroyVertexBuffer(vertex);
         vertex = vulkan->createVertexBuffer(data.data(), sizeof(T), data.size());
+        if (draw_id != -1) vulkan->updateVertex(draw_id, vertex);
     }
 
     void write_texture(int binding, const std::string &filename, uint32_t layers = 1);
@@ -75,7 +79,7 @@ struct Shader {
     vk::ShaderModule frag_shader = {};
     std::string shader_name;
     vk::CullModeFlags cull_mode = vk::CullModeFlagBits::eBack;
-    size_t draw_id;
+    size_t draw_id = -1;
 
     Engine *engine;
     Vulkan *vulkan;

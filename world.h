@@ -6,6 +6,7 @@
 struct Engine;
 struct World : Shader {
     World(Engine* engine);
+    virtual ~World() override;
 
     virtual void init() override;
     virtual void update() override;

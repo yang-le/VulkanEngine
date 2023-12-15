@@ -200,6 +200,8 @@ unsigned int Vulkan::renderBegin() {
     return currentBuffer.value;
 }
 
+void Vulkan::updateVertex(size_t i, const Buffer& vertex) { vertexBuffers[i] = vertex; }
+
 void Vulkan::draw(size_t i) {
     frame.commandBuffer().bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipelines[i]);
     frame.commandBuffer().bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayouts[i], 0, descriptorSets[i],
@@ -792,6 +794,7 @@ void Vulkan::setImageLayout(const vk::CommandBuffer& commandBuffer, vk::Image im
             sourceAccessMask = vk::AccessFlagBits::eHostWrite;
             break;
         case vk::ImageLayout::eGeneral:  // sourceAccessMask is empty
+            [[fallthrough]];
         case vk::ImageLayout::eUndefined:
             break;
         default:
@@ -802,10 +805,12 @@ void Vulkan::setImageLayout(const vk::CommandBuffer& commandBuffer, vk::Image im
     vk::PipelineStageFlags sourceStage;
     switch (oldLayout) {
         case vk::ImageLayout::eGeneral:
+            [[fallthrough]];
         case vk::ImageLayout::ePreinitialized:
             sourceStage = vk::PipelineStageFlagBits::eHost;
             break;
         case vk::ImageLayout::eTransferSrcOptimal:
+            [[fallthrough]];
         case vk::ImageLayout::eTransferDstOptimal:
             sourceStage = vk::PipelineStageFlagBits::eTransfer;
             break;
@@ -827,6 +832,7 @@ void Vulkan::setImageLayout(const vk::CommandBuffer& commandBuffer, vk::Image im
                 vk::AccessFlagBits::eDepthStencilAttachmentRead | vk::AccessFlagBits::eDepthStencilAttachmentWrite;
             break;
         case vk::ImageLayout::eGeneral:  // empty destinationAccessMask
+            [[fallthrough]];
         case vk::ImageLayout::ePresentSrcKHR:
             break;
         case vk::ImageLayout::eShaderReadOnlyOptimal:
@@ -861,6 +867,7 @@ void Vulkan::setImageLayout(const vk::CommandBuffer& commandBuffer, vk::Image im
             destinationStage = vk::PipelineStageFlagBits::eFragmentShader;
             break;
         case vk::ImageLayout::eTransferDstOptimal:
+            [[fallthrough]];
         case vk::ImageLayout::eTransferSrcOptimal:
             destinationStage = vk::PipelineStageFlagBits::eTransfer;
             break;

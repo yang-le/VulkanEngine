@@ -68,21 +68,28 @@ void VoxelMarkerMesh::add_voxel() {
 
     // check voxel id along normal
     auto result = get_voxel_info(voxel_world_pos + voxel_normal);
+    if (!result.chunk) return;
 
     // is the new place empty?
-    if (!std::get<0>(result)) {
-        auto chunk = std::get<3>(result);
-        chunk->voxels->at(std::get<1>(result)) = new_voxel_id;
-        chunk->build_mesh();
+    if (!result.id) {
+        auto chunk = result.chunk;
+        chunk->voxels->at(result.index) = new_voxel_id;
+        rebuild_adj_chunks();
 
         // was it an empty chunk?
-        if (chunk->empty) chunk->empty = false;
+        if (!chunk->empty) [[likely]]
+            chunk->rebuild_mesh();
+        else {
+            chunk->empty = false;
+            chunk->init();
+            chunk->attach();
+        }
     }
 }
 
 void VoxelMarkerMesh::rebuild_adj_chunk(int wx, int wy, int wz) {
     auto index = get_chunk_index(wx, wy, wz);
-    if (index != -1) world->chunks[index]->build_mesh();
+    if (index != -1) world->chunks[index]->rebuild_mesh();
 }
 
 void VoxelMarkerMesh::rebuild_adj_chunks() {
@@ -108,9 +115,12 @@ void VoxelMarkerMesh::rebuild_adj_chunks() {
 void VoxelMarkerMesh::remove_voxel() {
     if (!voxel_id) return;
 
-    chunk->voxels->at(voxel_id) = 0;
-    chunk->build_mesh();
+    chunk->voxels->at(voxel_index) = 0;
     rebuild_adj_chunks();
+    chunk->rebuild_mesh();
+
+    // was it an empty chunk?
+    chunk->empty = !std::any_of(chunk->voxels->begin(), chunk->voxels->end(), [](uint8_t id) { return id != 0; });
 }
 
 void VoxelMarkerMesh::set_voxel() {
@@ -144,11 +154,11 @@ bool VoxelMarkerMesh::ray_cast() {
 
     while (max_x <= 1.0 || max_y <= 1.0 || max_z <= 1.0) {
         auto result = get_voxel_info(current_voxel_pos);
-        if (std::get<0>(result)) {
-            voxel_id = std::get<0>(result);
-            voxel_index = std::get<1>(result);
-            voxel_local_pos = std::get<2>(result);
-            chunk = std::get<3>(result);
+        if (result.id) {
+            voxel_id = result.id;
+            voxel_index = result.index;
+            voxel_local_pos = result.pos;
+            chunk = result.chunk;
             voxel_world_pos = current_voxel_pos;
 
             if (step_dir == 0)
@@ -186,10 +196,10 @@ bool VoxelMarkerMesh::ray_cast() {
     return false;
 }
 
-std::tuple<uint8_t, size_t, glm::ivec3, ChunkMesh*> VoxelMarkerMesh::get_voxel_info(glm::ivec3 voxel_world_pos) {
+VoxelMarkerMesh::VoxelInfo VoxelMarkerMesh::get_voxel_info(glm::ivec3 voxel_world_pos) {
     auto chunk_pos = voxel_world_pos / CHUNK_SIZE;
     int cx = chunk_pos.x, cy = chunk_pos.y, cz = chunk_pos.z;
-    if (cx < 0 || cx >= WORLD_W || cy < 0 || cy >= WORLD_H || cz < 0 || cz >= WORLD_D) return {0, 0, {}, nullptr};
+    if (cx < 0 || cx >= WORLD_W || cy < 0 || cy >= WORLD_H || cz < 0 || cz >= WORLD_D) return {};
 
     auto chunk_index = cx + WORLD_W * cz + WORLD_AREA * cy;
     auto& chunk = world->chunks[chunk_index];

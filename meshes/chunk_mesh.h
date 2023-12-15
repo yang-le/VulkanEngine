@@ -5,7 +5,7 @@
 struct World;
 struct ChunkMesh : Shader {
     ChunkMesh() = default;
-    ChunkMesh(World* engine, glm::vec3 pos);
+    ChunkMesh(World* world, glm::vec3 pos);
 
     virtual void init() override;
     virtual void attach() override;
@@ -14,7 +14,8 @@ struct ChunkMesh : Shader {
     using Voxels = std::array<uint8_t, CHUNK_VOL>;
 
     std::unique_ptr<Voxels> build_voxels();
-    void build_mesh();
+    std::vector<Vertex> build_mesh();
+    void rebuild_mesh();
     bool is_on_frustum(const Camera& camera);
 
     World* world;

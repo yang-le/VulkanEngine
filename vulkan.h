@@ -55,6 +55,7 @@ class Vulkan {
                         const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures,
                         vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack);
     unsigned int renderBegin();
+    void updateVertex(size_t i, const Buffer& vertex);
     void draw(size_t i);
     void renderEnd(unsigned int currentBuffer);
     void render();

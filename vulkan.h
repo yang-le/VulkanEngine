@@ -14,6 +14,8 @@
 
 class Vulkan {
    public:
+    friend class Engine;
+
     struct Buffer {
         vk::Buffer buffer = {};
         VmaAllocation memory = {};
@@ -136,6 +138,7 @@ class Vulkan {
     std::vector<vk::PipelineLayout> pipelineLayouts;
     std::vector<vk::Pipeline> graphicsPipelines;
     vk::ClearColorValue bgColor;
+    uint32_t imageCount;
 
     struct FrameInFlight {
         static constexpr int FRAME_IN_FLIGHT = 3;

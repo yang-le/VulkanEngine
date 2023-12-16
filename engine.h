@@ -7,7 +7,6 @@
 
 #include "player.h"
 #include "scene.h"
-#include "settings.h"
 #include "vulkan.h"
 
 struct Engine {
@@ -25,8 +24,11 @@ struct Engine {
     GLFWwindow* window;
     Scene scene;
     Player player;
-    float fps = 0;
+
     float t = 0, x = 0, y = 0;
     float dt = 0, dx = 0, dy = 0;
     std::bitset<GLFW_KEY_LAST> key_state;
+
+    bool imgui_show;
+    vk::DescriptorPool imgui_pool;
 };

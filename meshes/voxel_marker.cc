@@ -206,7 +206,8 @@ VoxelMarkerMesh::VoxelInfo VoxelMarkerMesh::get_voxel_info(glm::ivec3 voxel_worl
 
     auto voxel_local_pos = voxel_world_pos - chunk_pos * CHUNK_SIZE;
     auto voxel_index = voxel_local_pos.x + CHUNK_SIZE * voxel_local_pos.z + CHUNK_AREA * voxel_local_pos.y;
-    auto voxel_id = chunk->voxels->at(voxel_index);
+    if (voxel_index < 0) return {};
 
+    auto voxel_id = chunk->voxels->at(voxel_index);
     return {voxel_id, voxel_index, voxel_local_pos, chunk.get()};
 }

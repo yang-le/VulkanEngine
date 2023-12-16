@@ -16,7 +16,7 @@ find_package(imgui CONFIG REQUIRED)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 add_executable(vulkan-engine
-    main.cc vulkan.cc engine.cc player.cc shader.cc scene.cc
+    main.cc vulkan.cc engine.cc player.cc shader.cc scene.cc settings.cc
     world.cc meshes/chunk_mesh.cc meshes/voxel_marker.cc
     meshes/water_mesh.cc meshes/cloud_mesh.cc
 )

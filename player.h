@@ -5,7 +5,7 @@
 struct Engine;
 
 struct Player : Camera {
-    Player(Engine* engine, glm::vec3 position = PLAYER_POS, float yaw = -90, float pitch = 0)
+    Player(Engine* engine, glm::vec3 position = PLAYER_POS, float yaw = glm::radians(-90.0f), float pitch = 0)
         : engine(engine), Camera(position, yaw, pitch) {}
 
     virtual void update() override {

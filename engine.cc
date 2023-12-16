@@ -4,6 +4,8 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_vulkan.h>
 
+#include "settings.h"
+
 Engine::Engine() : player(this), scene(this) {
     glfwInit();
 
@@ -57,6 +59,8 @@ void Engine::init() {
                         ImGuiIO& io = ImGui::GetIO();
                         io.AddMousePosEvent(xpos, ypos);
                     });
+                } else if (key == GLFW_KEY_F1 && action == GLFW_PRESS) {
+                    self->imgui_show = !self->imgui_show;
                 } else {
                     if (action == GLFW_PRESS)
                         self->key_state.set(key);
@@ -108,16 +112,27 @@ void Engine::run() {
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
 
-        // Start the Dear ImGui frame
-        ImGui_ImplVulkan_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
+        if (imgui_show) {
+            // Start the Dear ImGui frame
+            ImGui_ImplVulkan_NewFrame();
+            ImGui_ImplGlfw_NewFrame();
+            ImGui::NewFrame();
 
-        if (show_demo_window) ImGui::ShowDemoWindow(&show_demo_window);
-        ImGui::Begin("Information");
-        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
-        ImGui::Checkbox("Demo Window", &show_demo_window);
-        ImGui::End();
+            if (show_demo_window) ImGui::ShowDemoWindow(&show_demo_window);
+
+            ImGui::Begin("Information", nullptr, ImGuiWindowFlags_NoDecoration);
+            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+            ImGui::Text("Chunk x: %d, y: %d, z: %d", (int)player.position.x / CHUNK_SIZE,
+                        (int)player.position.y / CHUNK_SIZE, (int)player.position.z / CHUNK_SIZE);
+            ImGui::Text("Player direction %d", (360 - (int)glm::degrees(player.yaw) % 360) % 360);
+            ImGui::Text("Player position x: %d y: %d z: %d", (int)player.position.x, (int)player.position.y,
+                        (int)player.position.z);
+            ImGui::Text("Voxel position x: %d y: %d z %d", (int)scene.world->voxel_handler->position.x,
+                        (int)scene.world->voxel_handler->position.y, (int)scene.world->voxel_handler->position.z);
+            ImGui::SliderFloat("Player speed", &PLAYER_SPEED, 0.01, 0.05);
+            ImGui::Checkbox("Demo Window", &show_demo_window);
+            ImGui::End();
+        }
 
         update();
         render();
@@ -146,10 +161,12 @@ void Engine::render() {
 
         scene.draw();
 
-        ImGui::Render();
-        ImDrawData* draw_data = ImGui::GetDrawData();
-        const bool is_minimized = (draw_data->DisplaySize.x <= 0.0f || draw_data->DisplaySize.y <= 0.0f);
-        if (!is_minimized) ImGui_ImplVulkan_RenderDrawData(draw_data, vulkan.frame.commandBuffer());
+        if (imgui_show) {
+            ImGui::Render();
+            ImDrawData* draw_data = ImGui::GetDrawData();
+            const bool is_minimized = (draw_data->DisplaySize.x <= 0.0f || draw_data->DisplaySize.y <= 0.0f);
+            if (!is_minimized) ImGui_ImplVulkan_RenderDrawData(draw_data, vulkan.frame.commandBuffer());
+        }
 
         vulkan.renderEnd(currentBuffer);
     } catch (std::runtime_error e) {

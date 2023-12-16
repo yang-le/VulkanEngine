@@ -2,6 +2,10 @@
 
 #include <glm/glm.hpp>
 
+struct Setting {
+    static float player_speed;
+};
+
 // resolution
 constexpr int WIN_WIDTH = 1600;
 constexpr int WIN_HEIGHT = 900;
@@ -39,7 +43,7 @@ constexpr float FAR = 2000.0;
 constexpr float PITCH_MAX = glm::radians(89.0);
 
 // player
-constexpr float PLAYER_SPEED = 0.005;
+#define PLAYER_SPEED Setting::player_speed
 constexpr float PLAYER_ROT_SPEED = 0.003;
 constexpr glm::vec3 PLAYER_POS = glm::vec3(CENTER_XZ, WORLD_H* CHUNK_SIZE, CENTER_XZ);
 constexpr float MOUSE_SENSITIVITY = 0.002;

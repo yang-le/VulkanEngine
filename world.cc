@@ -19,11 +19,6 @@ World::World(Engine* engine) : engine(engine), Shader("chunk", engine) {
     voxel_handler = std::make_unique<VoxelMarkerMesh>(this);
 }
 
-World::~World() {
-    vulkan->destroyShaderModule(frag_shader);
-    vulkan->destroyShaderModule(vert_shader);
-}
-
 void World::init() {
 #ifdef _DEBUG
 #pragma omp parallel for
@@ -49,6 +44,9 @@ void World::attach() {
     for (auto& chunk : chunks)
         if (!chunk->empty) chunk->attach();
     voxel_handler->attach();
+
+    vulkan->destroyShaderModule(frag_shader);
+    vulkan->destroyShaderModule(vert_shader);
 }
 
 void World::draw() {

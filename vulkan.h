@@ -118,7 +118,7 @@ class Vulkan {
     vk::Device device;
     vk::Queue graphicsQueue;
     vk::Queue presentationQueue;
-#define computeQueue graphicsQueue
+    vk::Queue computeQueue;
     VmaAllocator vmaAllocator;
     vk::CommandPool commandPool;
     vk::CommandBuffer commandBuffer;

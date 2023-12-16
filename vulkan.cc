@@ -91,23 +91,26 @@ bool GLSLtoSPV(const vk::ShaderStageFlagBits shaderType, const std::string& glsl
 }  // namespace
 
 Vulkan::~Vulkan() {
-    device.waitIdle();
+    if (device) {
+        device.waitIdle();
 
-    frame.destroy(device, commandPool);
-    destroySwapChain();
-    vmaDestroyAllocator(vmaAllocator);
+        frame.destroy(device, commandPool);
+        destroySwapChain();
+        vmaDestroyAllocator(vmaAllocator);
 
-    device.destroyRenderPass(renderPass);
-    for (auto& pipeline : graphicsPipelines) device.destroyPipeline(pipeline);
-    for (auto& pipelineLayout : pipelineLayouts) device.destroyPipelineLayout(pipelineLayout);
-    for (auto& pool : descriptorPools) device.destroyDescriptorPool(pool);
-    for (auto& layout : descriptorSetLayouts) device.destroyDescriptorSetLayout(layout);
-    device.freeCommandBuffers(commandPool, commandBuffer);
-    device.destroyCommandPool(commandPool);
-    device.destroy();
-
-    instance.destroySurfaceKHR(surface);
-    instance.destroy();
+        device.destroyRenderPass(renderPass);
+        for (auto& pipeline : graphicsPipelines) device.destroyPipeline(pipeline);
+        for (auto& pipelineLayout : pipelineLayouts) device.destroyPipelineLayout(pipelineLayout);
+        for (auto& pool : descriptorPools) device.destroyDescriptorPool(pool);
+        for (auto& layout : descriptorSetLayouts) device.destroyDescriptorSetLayout(layout);
+        device.freeCommandBuffers(commandPool, commandBuffer);
+        device.destroyCommandPool(commandPool);
+        device.destroy();
+    }
+    if (instance) {
+        instance.destroySurfaceKHR(surface);
+        instance.destroy();
+    }
 }
 
 Vulkan& Vulkan::setAppInfo(const char* appName, uint32_t appVerson) {
@@ -460,6 +463,7 @@ void Vulkan::initDevice(std::function<vk::SurfaceKHR(const vk::Instance&)> getSu
 
     graphicsQueue = device.getQueue(graphicsQueueFamliyIndex, 0);
     presentationQueue = device.getQueue(presentationQueueFamliyIndex, 0);
+    computeQueue = graphicsQueue;
 
     VmaVulkanFunctions vulkanFunctions = {};
     vulkanFunctions.vkGetInstanceProcAddr = VULKAN_HPP_DEFAULT_DISPATCHER.vkGetInstanceProcAddr;

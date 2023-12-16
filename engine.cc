@@ -121,15 +121,20 @@ void Engine::run() {
             ImGui::NewFrame();
 
             if (show_demo_window) ImGui::ShowDemoWindow(&show_demo_window);
-
+            ImGui::SetNextWindowBgAlpha(0.35f);
             ImGui::Begin("Information", nullptr, ImGuiWindowFlags_NoDecoration);
+            auto prop = vulkan.physicalDevice.getProperties();
+            ImGui::Text("Device: %s", prop.deviceName.data());
+            ImGui::Text("Vulkan API Version: %d.%d.%d.%d", vk::apiVersionMajor(prop.apiVersion),
+                        vk::apiVersionMinor(prop.apiVersion), vk::apiVersionPatch(prop.apiVersion),
+                        vk::apiVersionVariant(prop.apiVersion));
             ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
             ImGui::Text("Chunk x: %d, y: %d, z: %d", (int)player.position.x / CHUNK_SIZE,
                         (int)player.position.y / CHUNK_SIZE, (int)player.position.z / CHUNK_SIZE);
             ImGui::Text("Player direction %d", (360 - (int)glm::degrees(player.yaw) % 360) % 360);
-            ImGui::Text("Player position x: %d y: %d z: %d", (int)player.position.x, (int)player.position.y,
+            ImGui::Text("Player position x: %d, y: %d, z: %d", (int)player.position.x, (int)player.position.y,
                         (int)player.position.z);
-            ImGui::Text("Voxel position x: %d y: %d z %d", (int)scene.world->voxel_handler->position.x,
+            ImGui::Text("Voxel position x: %d, y: %d, z: %d", (int)scene.world->voxel_handler->position.x,
                         (int)scene.world->voxel_handler->position.y, (int)scene.world->voxel_handler->position.z);
             ImGui::SliderFloat("Player speed", &PLAYER_SPEED, 0.01, 0.05);
             ImGui::Checkbox("Demo Window", &show_demo_window);

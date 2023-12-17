@@ -70,6 +70,9 @@ struct Shader {
     }
 
     void write_texture(int binding, const std::string &filename, uint32_t layers = 1);
+    void write_texture(int binding, const void *data, uint32_t width, uint32_t height, uint32_t layers = 1);
+    void write_texture(int binding, std::initializer_list<std::string> filenames,
+                       std::initializer_list<uint32_t> index);
 
     Vulkan::Buffer vertex;
     std::vector<vk::Format> vert_formats;

@@ -39,7 +39,9 @@ void VoxelMarkerMesh::init() {
     constexpr std::array<size_t, 36> tex_coord_indices = {0, 2, 3, 0, 1, 2, 0, 2, 3, 0, 1, 2, 0, 1, 2, 2, 3, 0,
                                                           2, 3, 0, 2, 0, 1, 0, 2, 3, 0, 1, 2, 3, 1, 2, 3, 0, 1};
 
-    write_vertex(hstack<Vertex>(get_data(vertices, indices), get_data(tex_coord_vertices, tex_coord_indices)));
+    auto vertex_data = hstack<Vertex>(get_data(vertices, indices), get_data(tex_coord_vertices, tex_coord_indices));
+    for (auto& vertex : vertex_data) vertex.pos = (vertex.pos - 0.5f) * 1.01f + 0.5f;
+    write_vertex(vertex_data);
 
     write_uniform(2, glm::mat4(1));
     write_uniform(3, interaction_mode);

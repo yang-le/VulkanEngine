@@ -186,8 +186,19 @@ ChunkMesh::ChunkMesh(World* world, glm::vec3 pos) : Shader("chunk", world->engin
     vert_formats = {vk::Format::eR32Uint};
 }
 
+ChunkMesh::~ChunkMesh() {
+    // erase them to avoid double free
+    uniforms.erase(0);
+    uniforms.erase(1);
+    uniforms.erase(3);
+}
+
 void ChunkMesh::init() {
-    Shader::init();
+    // no need to call Shader::init();
+    // stolen them from world
+    uniforms[0] = world->uniforms[0];
+    uniforms[1] = world->uniforms[1];
+    uniforms[3] = world->uniforms[3];
 
     write_vertex(build_mesh());
     write_uniform(2, model);

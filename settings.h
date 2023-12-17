@@ -44,7 +44,6 @@ constexpr float PITCH_MAX = glm::radians(89.0);
 
 // player
 #define PLAYER_SPEED Setting::player_speed
-constexpr float PLAYER_ROT_SPEED = 0.003;
 constexpr glm::vec3 PLAYER_POS = glm::vec3(CENTER_XZ, WORLD_H* CHUNK_SIZE, CENTER_XZ);
 constexpr float MOUSE_SENSITIVITY = 0.002;
 
@@ -73,7 +72,6 @@ constexpr int TREE_WIDTH = 4, TREE_HEIGHT = 8;
 constexpr int TREE_H_WIDTH = TREE_WIDTH / 2, TREE_H_HEIGHT = TREE_HEIGHT / 2;
 
 // water
-constexpr float WATER_LINE = 5.6;
 constexpr int WATER_AREA = 5 * CHUNK_SIZE * WORLD_W;
 
 // cloud

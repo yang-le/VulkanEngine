@@ -28,8 +28,9 @@ struct VoxelMarkerMesh : Shader {
     VoxelInfo get_voxel_info(glm::ivec3 voxel_world_pos);
 
     struct Vertex {
-        float x, y, z;
-        float u, v;
+        Vertex(float x, float y, float z, float u, float v) : pos(x, y, z), uv(u, v) {}
+        glm::vec3 pos;
+        glm::vec2 uv;
     };
 
     World* world;

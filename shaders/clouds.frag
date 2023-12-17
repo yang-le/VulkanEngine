@@ -1,10 +1,10 @@
 #version 450
 
-#extension GL_GOOGLE_include_directive : enable
-
-#include "constants.h"
+layout(binding = 3) uniform bg_color_t { vec3 bg_color; };
 
 layout(location = 0) out vec4 fragColor;
+
+const vec3 cloud_color = vec3(1);
 
 void main() {
     float fog_dist = gl_FragCoord.z / gl_FragCoord.w;

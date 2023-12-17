@@ -12,9 +12,7 @@ struct CloudMesh : Shader {
     virtual void init() override;
     virtual void update() override;
 
-    struct Vertex {
-        float x, y, z;
-    };
+    using Vertex = glm::vec3;
 
     void gen_clouds();
     std::vector<Vertex> build_mesh();

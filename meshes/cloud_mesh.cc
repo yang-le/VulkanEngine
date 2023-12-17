@@ -15,6 +15,7 @@ void CloudMesh::init() {
     write_vertex(build_mesh());
 
     write_uniform(2, 0.0f);
+    write_uniform(3, BG_COLOR, vk::ShaderStageFlagBits::eFragment);
 }
 
 void CloudMesh::update() {
@@ -75,12 +76,18 @@ std::vector<CloudMesh::Vertex> CloudMesh::build_mesh() {
             for (int ix = 0; ix < x_cont; ++ix)
                 for (int iz = 0; iz < z_cont; ++iz) visited.insert(x + ix + width * (z + iz));
 
-            Vertex v0 = {(float)x, y, (float)z};
-            Vertex v1 = {(float)x + x_cont, y, (float)z + z_cont};
-            Vertex v2 = {(float)x + x_cont, y, (float)z};
-            Vertex v3 = {(float)x, y, (float)z + z_cont};
+            Vertex v[] = {{(float)x, y, (float)z},
+                          {(float)x + x_cont, y, (float)z + z_cont},
+                          {(float)x + x_cont, y, (float)z},
+                          {(float)x, y, (float)z + z_cont}};
 
-            for (auto& vertex : {v0, v1, v2, v0, v3, v1}) {
+            // scale
+            for (auto& pos : v) {
+                pos.x = (pos.x - CENTER_XZ) * CLOUD_SCALE + CENTER_XZ;
+                pos.z = (pos.z - CENTER_XZ) * CLOUD_SCALE + CENTER_XZ;
+            }
+
+            for (const auto& vertex : {v[0], v[1], v[2], v[0], v[3], v[1]}) {
                 mesh.push_back(vertex);
             }
         }

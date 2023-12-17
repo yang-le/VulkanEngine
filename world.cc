@@ -20,13 +20,16 @@ World::World(Engine* engine) : engine(engine), Shader("chunk", engine) {
 }
 
 void World::init() {
+    Shader::init();
+    write_uniform(3, BG_COLOR, vk::ShaderStageFlagBits::eFragment);
+
 #ifdef _DEBUG
 #pragma omp parallel for
 #endif
     for (auto& chunk : chunks)
         if (!chunk->empty) chunk->init();
 
-    write_texture(3,
+    write_texture(4,
                   {"sand.png", "dirt.png", "grass_block_side.png", "grass_block_top.png", "stone.png", "snow.png",
                    "birch_leaves.png", "birch_log.png", "birch_log_top.png"},
                   {0, 0, 0, 1, 2, 3, 1, 1, 1, 4, 4, 4, 5, 5, 5, 6, 6, 6, 8, 7, 8});

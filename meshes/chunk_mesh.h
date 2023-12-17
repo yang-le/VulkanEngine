@@ -6,6 +6,7 @@ struct World;
 struct ChunkMesh : Shader {
     ChunkMesh() = default;
     ChunkMesh(World* world, glm::vec3 pos);
+    virtual ~ChunkMesh() override;
 
     virtual void init() override;
     virtual void attach() override;

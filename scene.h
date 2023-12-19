@@ -1,21 +1,19 @@
 #pragma once
 
 #include "shader.h"
-#include "world.h"
 
-struct Engine;
 struct Scene {
-    Scene(Engine* engine);
+    virtual ~Scene() = default;
 
-    void init();
-    void update();
-    void draw();
+    virtual void init();
+    virtual void update();
+    virtual void draw();
 
     void add_mesh(std::unique_ptr<Shader> shader);
 
-    std::unique_ptr<World> world;
     std::vector<std::unique_ptr<Shader>> meshes;
 
-    Engine* engine;
-    Vulkan* vulkan;
+   protected:
+    virtual void load() {}
+    virtual void attach() {}
 };

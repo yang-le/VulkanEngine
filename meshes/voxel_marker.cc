@@ -14,8 +14,8 @@ inline int get_chunk_index(int wx, int wy, int wz) {
 }
 }  // namespace
 
-VoxelMarkerMesh::VoxelMarkerMesh(World* world)
-    : Shader("voxel_marker", world->engine), world(world), engine(world->engine) {
+VoxelMarkerMesh::VoxelMarkerMesh(Engine& engine, const World& world)
+    : Shader("voxel_marker", engine), world(world), camera(engine.get_player()) {
     position = glm::vec3(0);
     vert_formats = {vk::Format::eR32G32B32Sfloat, vk::Format::eR32G32Sfloat};
 }
@@ -91,7 +91,7 @@ void VoxelMarkerMesh::add_voxel() {
 
 void VoxelMarkerMesh::rebuild_adj_chunk(int wx, int wy, int wz) {
     auto index = get_chunk_index(wx, wy, wz);
-    if (index != -1) world->chunks[index]->rebuild_mesh();
+    if (index != -1) world.chunks[index]->rebuild_mesh();
 }
 
 void VoxelMarkerMesh::rebuild_adj_chunks() {
@@ -135,13 +135,13 @@ void VoxelMarkerMesh::set_voxel() {
 void VoxelMarkerMesh::switch_mode() { interaction_mode = !interaction_mode; }
 
 bool VoxelMarkerMesh::ray_cast() {
-    auto ray = engine->player.forward * (float)MAX_RAY_DIST;
+    auto ray = camera.forward * (float)MAX_RAY_DIST;
 
     voxel_id = 0;
     voxel_normal = glm::ivec3(0);
 
     auto step_dir = -1;
-    auto current_voxel_pos = glm::ivec3(engine->player.position);
+    auto current_voxel_pos = glm::ivec3(camera.position);
 
     auto sign = glm::sign(ray);
     auto delta = glm::min(sign / ray, 10000000.0f);
@@ -149,7 +149,7 @@ bool VoxelMarkerMesh::ray_cast() {
     auto dy = sign.y != 0 ? delta.y : 10000000.0f;
     auto dz = sign.z != 0 ? delta.z : 10000000.0f;
 
-    auto fract = glm::fract(engine->player.position);
+    auto fract = glm::fract(camera.position);
     auto max_x = sign.x > 0 ? dx * (1.0 - fract.x) : dx * fract.x;
     auto max_y = sign.y > 0 ? dy * (1.0 - fract.y) : dy * fract.y;
     auto max_z = sign.z > 0 ? dz * (1.0 - fract.z) : dz * fract.z;
@@ -204,7 +204,7 @@ VoxelMarkerMesh::VoxelInfo VoxelMarkerMesh::get_voxel_info(glm::ivec3 voxel_worl
     if (cx < 0 || cx >= WORLD_W || cy < 0 || cy >= WORLD_H || cz < 0 || cz >= WORLD_D) return {};
 
     auto chunk_index = cx + WORLD_W * cz + WORLD_AREA * cy;
-    auto& chunk = world->chunks[chunk_index];
+    auto& chunk = world.chunks[chunk_index];
 
     auto voxel_local_pos = voxel_world_pos - chunk_pos * CHUNK_SIZE;
     auto voxel_index = voxel_local_pos.x + CHUNK_SIZE * voxel_local_pos.z + CHUNK_AREA * voxel_local_pos.y;

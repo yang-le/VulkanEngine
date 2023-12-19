@@ -5,7 +5,7 @@
 #include "shader.h"
 
 struct WaterMesh : Shader {
-    WaterMesh(Engine* engine);
+    WaterMesh(Engine& engine);
 
     virtual void init() override;
 

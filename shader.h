@@ -33,11 +33,9 @@ constexpr std::array<Ret, Size> hstack(const std::array<Tuples, Size>... arrays)
     return hstack<Ret>(std::make_index_sequence<Size>{}, arrays...);
 }
 
-struct Engine;
-
 struct Shader {
     Shader() = default;
-    Shader(const std::string &name, Engine *engine);
+    Shader(const std::string &name, Engine &engine);
     virtual ~Shader();
 
     virtual void init();
@@ -84,7 +82,6 @@ struct Shader {
     vk::CullModeFlags cull_mode = vk::CullModeFlagBits::eBack;
     size_t draw_id = -1;
 
-    Engine *engine;
     Vulkan *vulkan;
-    Player *player;
+    const Camera *camera;
 };

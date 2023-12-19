@@ -4,41 +4,68 @@
 #include <GLFW/glfw3.h>
 
 #include <bitset>
+#include <chrono>
 
 #include "gui.h"
 #include "player.h"
 #include "scene.h"
 #include "vulkan.h"
 
-struct Engine {
-    Engine();
-
+class Engine {
+   public:
     void run();
-    void add_mesh(std::unique_ptr<Shader> mesh);
-    void add_gui(std::unique_ptr<Gui> gui);
 
-    Vulkan vulkan;
-    GLFWwindow* window;
-    Scene scene;
-    Player player;
-    std::vector<std::unique_ptr<Gui>> guis;
+    void add_mesh(std::unique_ptr<Shader> mesh) { scene->add_mesh(std::move(mesh)); }
+    void add_gui(std::unique_ptr<Gui> gui) { guis.push_back(std::move(gui)); }
+    void set_player(std::unique_ptr<Player> player) { this->player = std::move(player); }
+    void set_scene(std::unique_ptr<Scene> scene) { this->scene = std::move(scene); }
+    Player& get_player() { return *player; }
+    Scene& get_scene() { return *scene; }
+    bool get_key_state(size_t key) const { return key_state[key]; }
 
-    float t = 0, x = 0, y = 0;
-    float dt = 0, dx = 0, dy = 0;
-    std::bitset<GLFW_KEY_LAST> key_state;
+    float get_time() const { return std::chrono::duration_cast<std::chrono::duration<float>>(t - start_time).count(); }
+    float get_delta_time() const { return dt.count(); }
 
-    bool imgui_show = false;
-    vk::DescriptorPool imgui_pool;
+    template <typename S>
+    S& get_scene() {
+        return static_cast<S&>(*scene);
+    }
+
+    template <typename P>
+    P& get_player() {
+        return static_cast<P&>(*player);
+    }
 
     struct EngineGui : Gui {
-        EngineGui(Engine* engine) : engine(engine), Gui("Information") {}
+        EngineGui(const Engine& engine) : engine(engine), Gui("Information") {}
         virtual void gui_draw() override;
-        Engine* engine;
+        const Engine& engine;
     };
+
+    Vulkan vulkan;
+    float mouse_dx = 0, mouse_dy = 0;
 
    private:
     void init();
     void destroy();
     void render();
-    void handle_events(int button, int action);
+    void handle_events(int button, int action) { player->handle_events(button, action); }
+
+   private:
+    GLFWwindow* window;
+
+    std::chrono::system_clock::time_point start_time;
+    std::chrono::system_clock::time_point t;
+    std::chrono::duration<float> dt;
+
+    float mouse_x = 0, mouse_y = 0;
+
+    std::bitset<GLFW_KEY_LAST> key_state;
+
+    bool imgui_show = false;
+    vk::DescriptorPool imgui_pool;
+
+    std::unique_ptr<Scene> scene;
+    std::unique_ptr<Player> player;
+    std::vector<std::unique_ptr<Gui>> guis;
 };

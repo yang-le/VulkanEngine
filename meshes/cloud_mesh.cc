@@ -4,7 +4,7 @@
 
 #include "engine.h"
 
-CloudMesh::CloudMesh(Engine* engine) : Shader("clouds", engine) {
+CloudMesh::CloudMesh(Engine& engine) : engine(engine), Shader("clouds", engine) {
     vert_formats = {vk::Format::eR32G32B32Sfloat};
     cull_mode = vk::CullModeFlagBits::eNone;
 }
@@ -21,7 +21,7 @@ void CloudMesh::init() {
 void CloudMesh::update() {
     Shader::update();
 
-    write_uniform(2, engine->t);
+    write_uniform(2, engine.get_time());
 }
 
 void CloudMesh::gen_clouds() {

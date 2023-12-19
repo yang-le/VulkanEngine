@@ -5,7 +5,7 @@
 
 struct Engine;
 struct World : Shader {
-    World(Engine* engine);
+    World(Engine& engine);
 
     virtual void init() override;
     virtual void update() override;
@@ -13,7 +13,7 @@ struct World : Shader {
     virtual void attach() override;
     virtual void draw() override;
 
-    Engine* engine;
+    const Camera& camera;
     // can we sparse this?
     std::array<std::unique_ptr<ChunkMesh::Voxels>, WORLD_VOL> voxels;
     std::array<std::unique_ptr<ChunkMesh>, WORLD_VOL> chunks;

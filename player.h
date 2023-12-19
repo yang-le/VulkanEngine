@@ -5,8 +5,9 @@
 struct Engine;
 
 struct Player : Camera {
-    Player(Engine* engine, glm::vec3 position = PLAYER_POS, float yaw = glm::radians(-90.0f), float pitch = 0)
+    Player(const Engine& engine, glm::vec3 position = {}, float yaw = 0, float pitch = 0)
         : engine(engine), Camera(position, yaw, pitch) {}
+    virtual ~Player() = default;
 
     virtual void update() override {
         keyboard_control();
@@ -14,9 +15,10 @@ struct Player : Camera {
         Camera::update();
     }
 
-    void handle_events(int button, int action);
+    virtual void handle_events(int button, int action) {}
+
     void mouse_control();
     void keyboard_control();
 
-    Engine* engine;
+    const Engine& engine;
 };

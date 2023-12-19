@@ -7,7 +7,7 @@
 #include "shader.h"
 
 struct CloudMesh : Shader {
-    CloudMesh(Engine* engine);
+    CloudMesh(Engine& engine);
 
     virtual void init() override;
     virtual void update() override;
@@ -17,5 +17,6 @@ struct CloudMesh : Shader {
     void gen_clouds();
     std::vector<Vertex> build_mesh();
 
+    Engine& engine;
     std::bitset<WORLD_AREA * CHUNK_SIZE * CHUNK_SIZE> cloud_data;
 };

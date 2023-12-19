@@ -179,7 +179,8 @@ inline void add_data(std::vector<ChunkMesh::Vertex>& vertex_data, std::initializ
 }
 }  // namespace
 
-ChunkMesh::ChunkMesh(World* world, glm::vec3 pos) : Shader("chunk", world->engine), world(world), position(pos) {
+ChunkMesh::ChunkMesh(Engine& engine, World* world, glm::vec3 pos)
+    : Shader("chunk", engine), world(world), position(pos) {
     model = glm::translate(glm::mat4(1), position * (float)CHUNK_SIZE);
     center = (position + 0.5f) * (float)CHUNK_SIZE;
 

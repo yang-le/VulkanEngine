@@ -4,7 +4,7 @@
 
 struct World;
 struct VoxelMarkerMesh : Shader {
-    VoxelMarkerMesh(World* world);
+    VoxelMarkerMesh(Engine& engine, const World& world);
 
     virtual void init() override;
     virtual void update() override;
@@ -33,8 +33,8 @@ struct VoxelMarkerMesh : Shader {
         glm::vec2 uv;
     };
 
-    World* world;
-    Engine* engine;
+    const World& world;
+    const Camera& camera;
 
     // ray casting result
     ChunkMesh* chunk;

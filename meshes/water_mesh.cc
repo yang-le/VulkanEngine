@@ -2,7 +2,7 @@
 
 #include "engine.h"
 
-WaterMesh::WaterMesh(Engine* engine) : Shader("water", engine) {
+WaterMesh::WaterMesh(Engine& engine) : Shader("water", engine) {
     vert_formats = {vk::Format::eR32G32B32Sfloat, vk::Format::eR32G32Sfloat};
     cull_mode = vk::CullModeFlagBits::eNone;
 }

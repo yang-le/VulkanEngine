@@ -34,8 +34,8 @@ std::vector<char> readFile(const std::string& filename) {
 }
 }  // namespace
 
-Shader::Shader(const std::string& name, Engine* engine)
-    : shader_name(name), engine(engine), vulkan(&engine->vulkan), player(&engine->player) {}
+Shader::Shader(const std::string& name, Engine& engine)
+    : shader_name(name), vulkan(&engine.vulkan), camera(&engine.get_player()) {}
 
 Shader::~Shader() {
     vulkan->destroyVertexBuffer(vertex);
@@ -44,13 +44,13 @@ Shader::~Shader() {
 }
 
 void Shader::init() {
-    auto proj = player->proj;
+    auto proj = camera->proj;
     proj[1][1] *= -1;
     write_uniform(0, proj);
-    write_uniform(1, player->view);
+    write_uniform(1, camera->view);
 }
 
-void Shader::update() { write_uniform(1, player->view); }
+void Shader::update() { write_uniform(1, camera->view); }
 
 void Shader::load() {
     try {

@@ -11,7 +11,6 @@ int main(int argc, char* argv[]) {
         engine.add_mesh(std::make_unique<CloudMesh>(&engine));
         engine.add_mesh(std::make_unique<WaterMesh>(&engine));
 
-        engine.init();
         engine.run();
     } catch (const std::exception& e) {
         std::cerr << e.what();

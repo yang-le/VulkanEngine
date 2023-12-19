@@ -8,19 +8,14 @@
 
 #include "settings.h"
 
-Engine::Engine() : player(this), scene(this) {
+Engine::Engine() : player(this), scene(this) {}
+
+void Engine::init() {
     glfwInit();
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     window = glfwCreateWindow(WIN_WIDTH, WIN_HEIGHT, "VulkanEngine", nullptr, nullptr);
-}
 
-Engine::~Engine() {
-    glfwDestroyWindow(window);
-    glfwTerminate();
-}
-
-void Engine::init() {
     uint32_t count;
     const char** extensions = glfwGetRequiredInstanceExtensions(&count);
     if (!extensions) throw std::runtime_error("GLFW cannot create Vulkan window surfaces!");
@@ -33,16 +28,13 @@ void Engine::init() {
         return surfaceKHR;
     });
 
-    scene.init();
-
     glfwSetWindowUserPointer(window, this);
     glfwSetMouseButtonCallback(window, [](GLFWwindow* window, int button, int action, int mods) {
         // (1) ALWAYS forward mouse data to ImGui! This is automatic with default backends. With your own backend:
-        ImGuiIO& io = ImGui::GetIO();
-        io.AddMouseButtonEvent(button, action);
+        ImGui::GetIO().AddMouseButtonEvent(button, action);
 
         // (2) ONLY forward mouse data to your underlying app/game.
-        if (io.WantCaptureMouse) return;
+        if (ImGui::GetIO().WantCaptureMouse) return;
 
         if (glfwGetWindowAttrib(window, GLFW_HOVERED) &&
             glfwGetInputMode(window, GLFW_CURSOR) != GLFW_CURSOR_DISABLED && button == GLFW_MOUSE_BUTTON_LEFT &&
@@ -85,13 +77,16 @@ void Engine::init() {
         }
     });
 
+    // init scene
+    scene.init();
+
+    // init for imgui
     vk::DescriptorPoolSize pool_size = {vk::DescriptorType::eCombinedImageSampler, 1};
     imgui_pool = vulkan.device.createDescriptorPool({{}, 1, 1, &pool_size});
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
-    // io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
 
     // Setup Platform/Renderer backends
     ImGui_ImplGlfw_InitForVulkan(window, true);
@@ -105,70 +100,52 @@ void Engine::init() {
     init_info.MinImageCount = vulkan.imageCount;
     init_info.ImageCount = vulkan.imageCount;
     ImGui_ImplVulkan_Init(&init_info, vulkan.renderPass);
+
+    add_gui(std::make_unique<EngineGui>(this));
 }
 
-void Engine::run() {
-    bool show_demo_window = false;
-    ImGuiIO& io = ImGui::GetIO();
-
-    while (!glfwWindowShouldClose(window)) {
-        glfwPollEvents();
-
-        if (imgui_show) {
-            // Start the Dear ImGui frame
-            ImGui_ImplVulkan_NewFrame();
-            ImGui_ImplGlfw_NewFrame();
-            ImGui::NewFrame();
-
-            if (show_demo_window) ImGui::ShowDemoWindow(&show_demo_window);
-            ImGui::SetNextWindowBgAlpha(0.35f);
-            ImGui::Begin("Information", nullptr, ImGuiWindowFlags_NoDecoration);
-            auto prop = vulkan.physicalDevice.getProperties();
-            ImGui::Text("Device: %s", prop.deviceName.data());
-            ImGui::Text("Vulkan API Version: %d.%d.%d.%d", vk::apiVersionMajor(prop.apiVersion),
-                        vk::apiVersionMinor(prop.apiVersion), vk::apiVersionPatch(prop.apiVersion),
-                        vk::apiVersionVariant(prop.apiVersion));
-            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
-            ImGui::Text("Chunk x: %d, y: %d, z: %d", (int)player.position.x / CHUNK_SIZE,
-                        (int)player.position.y / CHUNK_SIZE, (int)player.position.z / CHUNK_SIZE);
-            ImGui::Text("Player direction %d", (360 - (int)glm::degrees(player.yaw) % 360) % 360);
-            ImGui::Text("Player position x: %d, y: %d, z: %d", (int)player.position.x, (int)player.position.y,
-                        (int)player.position.z);
-            ImGui::Text("Voxel position x: %d, y: %d, z: %d", (int)scene.world->voxel_handler->position.x,
-                        (int)scene.world->voxel_handler->position.y, (int)scene.world->voxel_handler->position.z);
-            ImGui::SliderFloat("Player speed", &PLAYER_SPEED, 0.01, 0.05);
-            ImGui::Checkbox("Demo Window", &show_demo_window);
-            ImGui::End();
-        }
-
-        update();
-        render();
-    }
-
+void Engine::destroy() {
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
 
     vulkan.device.destroyDescriptorPool(imgui_pool);
+
+    glfwDestroyWindow(window);
+    glfwTerminate();
 }
 
-void Engine::update() {
+void Engine::run() {
+    init();
+    while (!glfwWindowShouldClose(window)) {
+        glfwPollEvents();
+        render();
+    }
+    destroy();
+}
+
+void Engine::render() {
+    // update dt
     auto prev_t = std::exchange(t, glfwGetTime());
     dt = t - prev_t;
 
     player.update();
     scene.update();
 
+    // clear dx, dy for next cycle
     dx = dy = 0;
-}
 
-void Engine::render() {
     try {
         auto currentBuffer = vulkan.renderBegin();
 
         scene.draw();
 
         if (imgui_show) {
+            // Start the Dear ImGui frame
+            ImGui_ImplVulkan_NewFrame();
+            ImGui_ImplGlfw_NewFrame();
+            ImGui::NewFrame();
+            for (auto& gui : guis) gui->gui_render();
             ImGui::Render();
             ImDrawData* draw_data = ImGui::GetDrawData();
             const bool is_minimized = (draw_data->DisplaySize.x <= 0.0f || draw_data->DisplaySize.y <= 0.0f);
@@ -194,3 +171,27 @@ void Engine::render() {
 void Engine::handle_events(int button, int action) { player.handle_events(button, action); }
 
 void Engine::add_mesh(std::unique_ptr<Shader> mesh) { scene.add_mesh(std::move(mesh)); }
+void Engine::add_gui(std::unique_ptr<Gui> gui) { guis.push_back(std::move(gui)); }
+
+void Engine::EngineGui::gui_draw() {
+    static bool show_demo_window = false;
+    if (show_demo_window) ImGui::ShowDemoWindow(&show_demo_window);
+
+    auto prop = engine->vulkan.physicalDevice.getProperties();
+    ImGui::Text("Device: %s", prop.deviceName.data());
+    ImGui::Text("Vulkan API Version: %d.%d.%d.%d", vk::apiVersionMajor(prop.apiVersion),
+                vk::apiVersionMinor(prop.apiVersion), vk::apiVersionPatch(prop.apiVersion),
+                vk::apiVersionVariant(prop.apiVersion));
+    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate,
+                ImGui::GetIO().Framerate);
+    ImGui::Text("Chunk x: %d, y: %d, z: %d", (int)engine->player.position.x / CHUNK_SIZE,
+                (int)engine->player.position.y / CHUNK_SIZE, (int)engine->player.position.z / CHUNK_SIZE);
+    ImGui::Text("Player direction %d", (360 - (int)glm::degrees(engine->player.yaw) % 360) % 360);
+    ImGui::Text("Player position x: %d, y: %d, z: %d", (int)engine->player.position.x, (int)engine->player.position.y,
+                (int)engine->player.position.z);
+    ImGui::Text("Voxel position x: %d, y: %d, z: %d", (int)engine->scene.world->voxel_handler->position.x,
+                (int)engine->scene.world->voxel_handler->position.y,
+                (int)engine->scene.world->voxel_handler->position.z);
+    ImGui::SliderFloat("Player speed", &PLAYER_SPEED, 0.01, 0.05);
+    ImGui::Checkbox("Demo Window", &show_demo_window);
+}

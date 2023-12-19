@@ -19,7 +19,8 @@ void main() {
     vec2 face_uv = uv;
     face_uv.x = (min(face_id, 2) - uv.x) / 3.0;
 
-    vec3 tex_col = texture(u_texture_array, vec3(face_uv, voxel_id)).rgb;
+    vec4 tex = texture(u_texture_array, vec3(face_uv, voxel_id));
+    vec3 tex_col = tex.rgb;
     tex_col = pow(tex_col, gamma);
 
     tex_col *= shading;
@@ -33,5 +34,7 @@ void main() {
     tex_col = mix(tex_col, bg_color, (1.0 - exp2(-0.00001 * fog_dist * fog_dist)));
 
     tex_col = pow(tex_col, inv_gamma);
-    fragColor = vec4(tex_col, 1.0);
+    fragColor = vec4(tex_col, tex.a);
+    // may be we need an OIT algorithm here to handle the alpha value
+    // see https://github.com/KhronosGroup/Vulkan-Samples/blob/main/samples/api/oit_linked_lists/README.adoc
 }

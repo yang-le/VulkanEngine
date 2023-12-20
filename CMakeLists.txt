@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.10)
 project(VulkanEngine)
 
+option(BUILD_SHARED_LIBS "Build Shared Libs" ON)
+
+set (CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ${BUILD_SHARED_LIBS})
 
 find_package(glfw3 CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
@@ -13,23 +16,33 @@ if (OpenMP_CXX_FOUND)
 endif (OpenMP_CXX_FOUND)
 find_package(imgui CONFIG REQUIRED)
 
+include_directories(${CMAKE_SOURCE_DIR})
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-add_executable(vulkan-engine
-    main.cc vulkan.cc engine.cc player.cc shader.cc scene.cc settings.cc
-    world.cc meshes/chunk_mesh.cc meshes/voxel_marker.cc
+add_library(vkegine vulkan.cc engine.cc player.cc shader.cc scene.cc settings.cc)
+
+target_link_libraries(vkegine PUBLIC glfw)
+target_link_libraries(vkegine PUBLIC glm::glm)
+target_link_libraries(vkegine PUBLIC glslang::SPIRV glslang::glslang-default-resource-limits)
+target_link_libraries(vkegine PUBLIC Vulkan::Headers)
+target_link_libraries(vkegine PUBLIC GPUOpen::VulkanMemoryAllocator)
+target_link_libraries(vkegine PUBLIC imgui::imgui)
+
+add_executable(vkcraft
+    craft.cc world.cc meshes/chunk_mesh.cc meshes/voxel_marker.cc
     meshes/water_mesh.cc meshes/cloud_mesh.cc
 )
 
-target_link_libraries(vulkan-engine PRIVATE glfw)
-target_link_libraries(vulkan-engine PRIVATE glm::glm)
-target_link_libraries(vulkan-engine PRIVATE glslang::SPIRV glslang::glslang-default-resource-limits)
-target_link_libraries(vulkan-engine PRIVATE Vulkan::Headers)
-target_link_libraries(vulkan-engine PRIVATE GPUOpen::VulkanMemoryAllocator)
-target_link_libraries(vulkan-engine PRIVATE imgui::imgui)
+target_link_libraries(vkcraft PRIVATE vkegine)
 
-install(TARGETS vulkan-engine DESTINATION .)
-install(FILES build/vcpkg_installed/x64-windows/bin/glfw3.dll DESTINATION .)
+add_executable(empty empty.cc)
+
+target_link_libraries(empty PRIVATE vkegine)
+
+install(TARGETS vkcraft empty DESTINATION .)
+if (${BUILD_SHARED_LIBS})
+    install(TARGETS vkegine DESTINATION .)
+endif (${BUILD_SHARED_LIBS})
+install(FILES ${CMAKE_BINARY_DIR}/vcpkg_installed/x64-windows/bin/glfw3.dll DESTINATION .)
 install(DIRECTORY assets DESTINATION .)
 install(DIRECTORY shaders DESTINATION .)
 

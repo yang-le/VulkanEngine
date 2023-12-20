@@ -77,6 +77,8 @@ void Engine::init() {
     });
 
     // init scene
+    if (!player) player = std::make_unique<Player>(*this);
+    if (!scene) scene = std::make_unique<Scene>();
     scene->init();
 
     // init for imgui

@@ -50,8 +50,6 @@ void Shader::init() {
     write_uniform(1, camera->view);
 }
 
-void Shader::update() { write_uniform(1, camera->view); }
-
 void Shader::load() {
     try {
         vert_shader = vulkan->createShaderModule(vk::ShaderStageFlagBits::eVertex,
@@ -74,8 +72,6 @@ void Shader::attach() {
     vulkan->destroyShaderModule(frag_shader);
     vulkan->destroyShaderModule(vert_shader);
 }
-
-void Shader::draw() { vulkan->draw(draw_id); }
 
 void Shader::write_texture(int binding, const std::string& filename, uint32_t layers) {
     void* image;

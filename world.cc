@@ -1,7 +1,5 @@
 #include "world.h"
 
-#include "engine.h"
-
 World::World(Engine& engine) : camera(engine.get_player()), Shader("chunk", engine) {
 #ifdef _DEBUG
 #pragma omp parallel for

@@ -1,9 +1,9 @@
 #pragma once
 
+#include "engine.h"
 #include "meshes/chunk_mesh.h"
 #include "meshes/voxel_marker.h"
 
-struct Engine;
 struct World : Shader {
     World(Engine& engine);
 

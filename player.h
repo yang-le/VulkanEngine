@@ -2,9 +2,9 @@
 
 #include "camera.h"
 
-struct Engine;
-
-struct Player : Camera {
+class Engine;
+class Player : public Camera {
+   public:
     Player(const Engine& engine, glm::vec3 position = {}, float yaw = 0, float pitch = 0)
         : engine(engine), Camera(position, yaw, pitch) {}
     virtual ~Player() = default;
@@ -17,6 +17,7 @@ struct Player : Camera {
 
     virtual void handle_events(int button, int action) {}
 
+   private:
     void mouse_control();
     void keyboard_control();
 

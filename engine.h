@@ -36,12 +36,6 @@ class Engine {
         return static_cast<P&>(*player);
     }
 
-    struct EngineGui : Gui {
-        EngineGui(const Engine& engine) : engine(engine), Gui("Information") {}
-        virtual void gui_draw() override;
-        const Engine& engine;
-    };
-
     Vulkan vulkan;
     float mouse_dx = 0, mouse_dy = 0;
 
@@ -52,6 +46,12 @@ class Engine {
     void handle_events(int button, int action) { player->handle_events(button, action); }
 
    private:
+    struct EngineGui : Gui {
+        EngineGui(const Engine& engine) : engine(engine), Gui("Information") {}
+        virtual void gui_draw() override;
+        const Engine& engine;
+    };
+
     GLFWwindow* window;
 
     std::chrono::system_clock::time_point start_time;

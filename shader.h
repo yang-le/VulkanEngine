@@ -39,10 +39,13 @@ struct Shader {
     virtual ~Shader();
 
     virtual void init();
-    virtual void update();
+    virtual void update() { write_uniform(1, camera->view); }
+    virtual void draw() {
+        if (draw_id != -1) vulkan->draw(draw_id);
+    }
+
     virtual void load();
     virtual void attach();
-    virtual void draw();
 
     template <typename T>
     void write_uniform(int binding, const T &data, vk::ShaderStageFlags stage = {}) {

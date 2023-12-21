@@ -79,7 +79,6 @@ void Engine::init() {
     // init scene
     if (!player) player = std::make_unique<Player>(*this);
     if (!scene) scene = std::make_unique<Scene>();
-    scene->init();
 
     // init for imgui
     vk::DescriptorPoolSize pool_size = {vk::DescriptorType::eCombinedImageSampler, 1};
@@ -117,6 +116,7 @@ void Engine::destroy() {
 }
 
 void Engine::loop() {
+    scene->init();
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
         render();

@@ -55,12 +55,12 @@ class Vulkan {
     size_t attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
                         const Buffer& vertex, const std::vector<vk::Format>& vertexFormats,
                         const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures,
-                        vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack);
+                        vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack, bool autoDestroy = true);
     size_t attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
                         const std::vector<uint32_t>& vertexStrides, const std::vector<vk::Format>& vertexFormats,
                         const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures,
                         vk::PrimitiveTopology primitiveTopology,
-                        vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack);
+                        vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack, bool autoDestroy = true);
     unsigned int renderBegin();
     void updateVertex(size_t i, const Buffer& vertex);
     void draw(size_t i);

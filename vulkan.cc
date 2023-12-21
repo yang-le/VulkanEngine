@@ -168,20 +168,34 @@ void Vulkan::init(vk::Extent2D extent, std::function<vk::SurfaceKHR(const vk::In
 size_t Vulkan::attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
                             const Buffer& vertex, const std::vector<vk::Format>& vertexFormats,
                             const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures,
-                            vk::CullModeFlags cullMode) {
+                            vk::CullModeFlags cullMode, bool autoDestroy) {
     vertexBuffers.push_back(vertex);
 
     initDescriptorSet(uniforms, textures);
-    return initPipeline(vertexShaderModule, fragmentShaderModule, vertex.stride, vertexFormats, cullMode);
+    size_t drawId = initPipeline(vertexShaderModule, fragmentShaderModule, vertex.stride, vertexFormats, cullMode);
+
+    if (autoDestroy) {
+        destroyShaderModule(fragmentShaderModule);
+        destroyShaderModule(vertexShaderModule);
+    }
+
+    return drawId;
 }
 
 size_t Vulkan::attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
                             const std::vector<uint32_t>& vertexStrides, const std::vector<vk::Format>& vertexFormats,
                             const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures,
-                            vk::PrimitiveTopology primitiveTopology, vk::CullModeFlags cullMode) {
+                            vk::PrimitiveTopology primitiveTopology, vk::CullModeFlags cullMode, bool autoDestroy) {
     initDescriptorSet(uniforms, textures);
-    return initPipeline(vertexShaderModule, fragmentShaderModule, vertexStrides, vertexFormats, cullMode,
-                        primitiveTopology);
+    size_t drawId = initPipeline(vertexShaderModule, fragmentShaderModule, vertexStrides, vertexFormats, cullMode,
+                                 primitiveTopology);
+
+    if (autoDestroy) {
+        destroyShaderModule(fragmentShaderModule);
+        destroyShaderModule(vertexShaderModule);
+    }
+
+    return drawId;
 }
 
 unsigned int Vulkan::renderBegin() {
@@ -710,7 +724,7 @@ size_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const vk
     std::vector<vk::VertexInputAttributeDescription> vertexInputAtrributeDescriptions;
     vertexInputAtrributeDescriptions.reserve(vertexFormats.size());
     for (uint32_t i = 0; i < vertexFormats.size(); ++i)
-        vertexInputAtrributeDescriptions.emplace_back(0, i, vertexFormats[i], 0);
+        vertexInputAtrributeDescriptions.emplace_back(i, i, vertexFormats[i], 0);
 
     return initPipeline(vertexShaderModule, fragmentShaderModule,
                         {{}, vertexInputBindingDescriptions, vertexInputAtrributeDescriptions}, cullMode,

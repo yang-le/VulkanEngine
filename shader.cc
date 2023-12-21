@@ -67,8 +67,6 @@ void Shader::load() {
 
 void Shader::attach() {
     draw_id = vulkan->attachShader(vert_shader, frag_shader, vertex, vert_formats, uniforms, textures, cull_mode);
-    vulkan->destroyShaderModule(frag_shader);
-    vulkan->destroyShaderModule(vert_shader);
 }
 
 void Shader::write_texture(int binding, const std::string& filename, uint32_t layers) {

@@ -65,7 +65,7 @@ struct Model {
                           primitive.indexCount, primitive.vertex, primitive.vertexOffset);
     }
     void draw(const Mesh& mesh) {
-        for (auto& primitive : mesh.primitives) draw(primitive);
+        for (int i = 0; i < mesh.primitives.size(); ++i) draw(mesh.primitives[i]);
     }
     void draw(const Node& node) {
         if (node.mesh) draw(*node.mesh);
@@ -88,9 +88,9 @@ struct Model {
                       const std::vector<vk::Format>& vertexFormats, const std::map<int, Vulkan::Buffer>& uniforms,
                       const std::map<int, Vulkan::Texture>& textures,
                       vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack) {
-        for (auto& primitive : mesh.primitives)
-            attachShader(primitive, vertexShaderModule, fragmentShaderModule, vertexFormats, uniforms, textures,
-                         cullMode);
+        for (int i = 0; i < mesh.primitives.size(); ++i)
+            attachShader(mesh.primitives[i], vertexShaderModule, fragmentShaderModule, vertexFormats, uniforms,
+                         textures, cullMode);
     }
 
     void attachShader(Node& node, vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,

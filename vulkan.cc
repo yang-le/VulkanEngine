@@ -175,6 +175,15 @@ size_t Vulkan::attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModul
     return initPipeline(vertexShaderModule, fragmentShaderModule, vertex.stride, vertexFormats, cullMode);
 }
 
+size_t Vulkan::attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
+                            const std::vector<uint32_t>& vertexStrides, const std::vector<vk::Format>& vertexFormats,
+                            const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures,
+                            vk::PrimitiveTopology primitiveTopology, vk::CullModeFlags cullMode) {
+    initDescriptorSet(uniforms, textures);
+    return initPipeline(vertexShaderModule, fragmentShaderModule, vertexStrides, vertexFormats, cullMode,
+                        primitiveTopology);
+}
+
 unsigned int Vulkan::renderBegin() {
     device.waitForFences(frame.drawFence(), vk::True, std::numeric_limits<uint64_t>::max());
 
@@ -212,6 +221,17 @@ void Vulkan::draw(size_t i) {
                                              nullptr);
     frame.commandBuffer().bindVertexBuffers(0, vertexBuffers[i].buffer, {0});
     frame.commandBuffer().draw(vertexBuffers[i].size / vertexBuffers[i].stride, 1, 0, 0);
+}
+
+void Vulkan::drawIndex(size_t i, const vk::Buffer& index, vk::DeviceSize indexOffset, vk::IndexType indexType,
+                       uint32_t count, const std::vector<vk::Buffer>& vertex,
+                       const std::vector<vk::DeviceSize>& vertexOffset) {
+    frame.commandBuffer().bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipelines[i]);
+    frame.commandBuffer().bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayouts[i], 0, descriptorSets[i],
+                                             nullptr);
+    frame.commandBuffer().bindVertexBuffers(0, vertex, vertexOffset);
+    frame.commandBuffer().bindIndexBuffer(index, indexOffset, indexType);
+    frame.commandBuffer().drawIndexed(count, 1, 0, 0, 0);
 }
 
 void Vulkan::renderEnd(unsigned int currentBuffer) {
@@ -286,7 +306,30 @@ void Vulkan::destroyVertexBuffer(const Buffer& buffer) {
     if (buffer.size) vmaDestroyBuffer(vmaAllocator, buffer.buffer, buffer.memory);
 }
 
-Vulkan::Texture Vulkan::createTexture(vk::Extent2D extent, const void* data, uint32_t layers, bool anisotropy) {
+Vulkan::Buffer Vulkan::createGltfBuffer(const void* data, size_t size) {
+    Buffer buffer;
+    buffer.stride = -1;
+    buffer.size = size;
+
+    std::tie(buffer.buffer, buffer.memory) =
+        createBuffer(buffer.size,
+                     vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eIndexBuffer |
+                         vk::BufferUsageFlagBits::eUniformBuffer,
+                     vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+
+    vmaMapMemory(vmaAllocator, buffer.memory, &buffer.data);
+    memcpy(buffer.data, data, buffer.size);
+    vmaUnmapMemory(vmaAllocator, buffer.memory);
+
+    return buffer;
+}
+void Vulkan::destroyGltfBuffer(const Buffer& buffer) {
+    if (buffer.size) vmaDestroyBuffer(vmaAllocator, buffer.buffer, buffer.memory);
+}
+
+Vulkan::Texture Vulkan::createTexture(vk::Extent2D extent, const void* data, uint32_t layers, bool anisotropy,
+                                      vk::Filter mag, vk::Filter min, vk::SamplerAddressMode modeU,
+                                      vk::SamplerAddressMode modeV, vk::SamplerAddressMode modeW) {
     Texture texture;
 
     vk::Format format = vk::Format::eR8G8B8A8Unorm;
@@ -355,11 +398,10 @@ Vulkan::Texture Vulkan::createTexture(vk::Extent2D extent, const void* data, uin
     device.waitForFences(fence, vk::True, std::numeric_limits<uint64_t>::max());
     device.destroyFence(fence);
 
-    vk::SamplerCreateInfo samplerCreateInfo(
-        {}, vk::Filter::eLinear, vk::Filter::eLinear, vk::SamplerMipmapMode::eLinear, vk::SamplerAddressMode::eRepeat,
-        vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat, 0.0f, anisotropy,
-        physicalDevice.getProperties().limits.maxSamplerAnisotropy, false, vk::CompareOp::eNever, 0.0f, mipLevels,
-        vk::BorderColor::eFloatOpaqueBlack);
+    vk::SamplerCreateInfo samplerCreateInfo({}, mag, min, vk::SamplerMipmapMode::eLinear, modeU, modeV, modeW, 0.0f,
+                                            anisotropy, physicalDevice.getProperties().limits.maxSamplerAnisotropy,
+                                            false, vk::CompareOp::eNever, 0.0f, mipLevels,
+                                            vk::BorderColor::eFloatOpaqueBlack);
     texture.sampler = device.createSampler(samplerCreateInfo);
 
     vk::ImageViewCreateInfo imageViewCreateInfo({}, texture.image,
@@ -642,27 +684,47 @@ void Vulkan::initFrameBuffers() {
 size_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
                             uint32_t vertexStride, const std::vector<vk::Format>& vertexFormats,
                             vk::CullModeFlags cullMode, bool depthBuffered) {
+    vk::VertexInputBindingDescription vertexInputBindingDescription(0, vertexStride);
+
+    std::vector<vk::VertexInputAttributeDescription> vertexInputAtrributeDescriptions;
+    vertexInputAtrributeDescriptions.reserve(vertexFormats.size());
+
+    uint32_t offset = 0;
+    for (uint32_t i = 0; i < vertexFormats.size(); ++i) {
+        vertexInputAtrributeDescriptions.emplace_back(i, 0, vertexFormats[i], offset);
+        offset += vk::blockSize(vertexFormats[i]);
+    }
+
+    return initPipeline(vertexShaderModule, fragmentShaderModule,
+                        {{}, vertexInputBindingDescription, vertexInputAtrributeDescriptions}, cullMode,
+                        vk::PrimitiveTopology::eTriangleList, depthBuffered);
+}
+
+size_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
+                            const std::vector<uint32_t>& vertexStrides, const std::vector<vk::Format>& vertexFormats,
+                            vk::CullModeFlags cullMode, vk::PrimitiveTopology primitiveTopology, bool depthBuffered) {
+    std::vector<vk::VertexInputBindingDescription> vertexInputBindingDescriptions;
+    vertexInputBindingDescriptions.reserve(vertexStrides.size());
+    for (int i = 0; i < vertexStrides.size(); ++i) vertexInputBindingDescriptions.emplace_back(i, vertexStrides[i]);
+
+    std::vector<vk::VertexInputAttributeDescription> vertexInputAtrributeDescriptions;
+    vertexInputAtrributeDescriptions.reserve(vertexFormats.size());
+    for (uint32_t i = 0; i < vertexFormats.size(); ++i)
+        vertexInputAtrributeDescriptions.emplace_back(0, i, vertexFormats[i], 0);
+
+    return initPipeline(vertexShaderModule, fragmentShaderModule,
+                        {{}, vertexInputBindingDescriptions, vertexInputAtrributeDescriptions}, cullMode,
+                        primitiveTopology, depthBuffered);
+}
+
+size_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
+                            const vk::PipelineVertexInputStateCreateInfo& vertexInfo, vk::CullModeFlags cullMode,
+                            vk::PrimitiveTopology primitiveTopology, bool depthBuffered) {
     std::array<vk::PipelineShaderStageCreateInfo, 2> pipelineShaderStageCreateInfos = {
         vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eVertex, vertexShaderModule, "main"),
         vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eFragment, fragmentShaderModule, "main")};
 
-    std::vector<vk::VertexInputAttributeDescription> vertexInputAtrributeDescription;
-    vk::VertexInputBindingDescription vertexInputBindingDescription(0, vertexStride);
-    vk::PipelineVertexInputStateCreateInfo pipelineVertexInputeStateCreateInfo;
-
-    if (vertexStride > 0) {
-        vertexInputAtrributeDescription.reserve(vertexFormats.size());
-        uint32_t offset = 0;
-        for (uint32_t i = 0; i < vertexFormats.size(); ++i) {
-            vertexInputAtrributeDescription.emplace_back(i, 0, vertexFormats[i], offset);
-            offset += vk::blockSize(vertexFormats[i]);
-        }
-        pipelineVertexInputeStateCreateInfo.setVertexBindingDescriptions(vertexInputBindingDescription);
-        pipelineVertexInputeStateCreateInfo.setVertexAttributeDescriptions(vertexInputAtrributeDescription);
-    }
-
-    vk::PipelineInputAssemblyStateCreateInfo pipelineInputAssemblyStateCreateInfo({},
-                                                                                  vk::PrimitiveTopology::eTriangleList);
+    vk::PipelineInputAssemblyStateCreateInfo pipelineInputAssemblyStateCreateInfo({}, primitiveTopology);
 
     vk::Viewport viewport(0, 0, imageExtent.width, imageExtent.height, 0, 1);
     vk::Rect2D scissor({0, 0}, imageExtent);
@@ -690,10 +752,10 @@ size_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const vk
     pipelineLayouts.push_back(pipelineLayout);
 
     vk::GraphicsPipelineCreateInfo graphicPipelineCreateInfo(
-        {}, pipelineShaderStageCreateInfos, &pipelineVertexInputeStateCreateInfo, &pipelineInputAssemblyStateCreateInfo,
-        nullptr, &pipelineViewportStateCreateInfo, &pipelineRasterizationStateCreateInfo,
-        &pipelineMultisampleStateCreateInfo, &pipelineDepthStencilStateCreateInfo, &pipelineColorBlendStateCreateInfo,
-        &pipelineDynamicStateCreateInfo, pipelineLayout, renderPass);
+        {}, pipelineShaderStageCreateInfos, &vertexInfo, &pipelineInputAssemblyStateCreateInfo, nullptr,
+        &pipelineViewportStateCreateInfo, &pipelineRasterizationStateCreateInfo, &pipelineMultisampleStateCreateInfo,
+        &pipelineDepthStencilStateCreateInfo, &pipelineColorBlendStateCreateInfo, &pipelineDynamicStateCreateInfo,
+        pipelineLayout, renderPass);
 
     vk::Result result;
     vk::Pipeline pipeline;

@@ -18,7 +18,7 @@ find_package(imgui CONFIG REQUIRED)
 
 include_directories(${CMAKE_SOURCE_DIR})
 
-add_library(vkegine vulkan.cc engine.cc player.cc shader.cc scene.cc settings.cc)
+add_library(vkegine vulkan.cc engine.cc player.cc shader.cc scene.cc gltf.cc settings.cc)
 
 target_link_libraries(vkegine PUBLIC glfw)
 target_link_libraries(vkegine PUBLIC glm::glm)

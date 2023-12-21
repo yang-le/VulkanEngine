@@ -13,7 +13,15 @@
 
 class Engine {
    public:
-    void run();
+    void run() {
+        init();
+        loop();
+        destroy();
+    }
+
+    void init();
+    void loop();
+    void destroy();
 
     void add_mesh(std::unique_ptr<Shader> mesh) { scene->add_mesh(std::move(mesh)); }
     void add_gui(std::unique_ptr<Gui> gui) { guis.push_back(std::move(gui)); }
@@ -40,8 +48,6 @@ class Engine {
     float mouse_dx = 0, mouse_dy = 0;
 
    private:
-    void init();
-    void destroy();
     void render();
     void handle_events(int button, int action) { player->handle_events(button, action); }
 

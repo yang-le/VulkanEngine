@@ -12,6 +12,7 @@
         "glfw-binding",
         "vulkan-binding"
       ]
-    }
+    },
+    "tinygltf"
   ]
 }

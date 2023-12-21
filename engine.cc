@@ -116,13 +116,11 @@ void Engine::destroy() {
     glfwTerminate();
 }
 
-void Engine::run() {
-    init();
+void Engine::loop() {
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
         render();
     }
-    destroy();
 }
 
 void Engine::render() {

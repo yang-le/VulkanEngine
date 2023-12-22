@@ -1,7 +1,6 @@
 #pragma once
 
 #include "player.h"
-#include "settings.h"
 #include "vulkan.h"
 
 template <typename... T, size_t verSize, size_t indSize, size_t... I>

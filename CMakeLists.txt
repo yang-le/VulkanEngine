@@ -38,7 +38,11 @@ add_executable(empty empty.cc)
 
 target_link_libraries(empty PRIVATE vkegine)
 
-install(TARGETS vkcraft empty DESTINATION .)
+add_executable(demo demo.cc)
+
+target_link_libraries(demo PRIVATE vkegine)
+
+install(TARGETS vkcraft empty demo DESTINATION .)
 if (${BUILD_SHARED_LIBS})
     install(TARGETS vkegine DESTINATION .)
 endif (${BUILD_SHARED_LIBS})

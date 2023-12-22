@@ -361,7 +361,7 @@ bool ChunkMesh::is_on_frustum(const Camera& camera) {
 
     // outside the NEAR and FAR planes?
     auto sz = glm::dot(sphere_vec, camera.forward);
-    if (sz < NEAR - CHUNK_SPHERE_RADIUS || sz > FAR + CHUNK_SPHERE_RADIUS) return false;
+    if (sz < ZNEAR - CHUNK_SPHERE_RADIUS || sz > ZFAR + CHUNK_SPHERE_RADIUS) return false;
 
     // outside the TOP and BOTTOM planes?
     auto sy = glm::dot(sphere_vec, camera.up);

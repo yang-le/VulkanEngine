@@ -12,7 +12,7 @@ struct Camera {
         right = glm::vec3(1, 0, 0);
         forward = glm::vec3(0, 0, -1);
 
-        proj = glm::perspective(V_FOV, ASPECT_RATIO, NEAR, FAR);
+        proj = glm::perspective(V_FOV, ASPECT_RATIO, ZNEAR, ZFAR);
         view = glm::mat4(1);
     }
 

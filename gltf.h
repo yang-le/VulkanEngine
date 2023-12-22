@@ -9,7 +9,8 @@
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include "vulkan.h"
+#include "engine.h"
+#include "shader.h"
 
 namespace gltf {
 struct Primitive {
@@ -128,5 +129,18 @@ struct Model {
     std::vector<Vulkan::Buffer> bufferViews;
     std::vector<Node> nodes;
     std::vector<Mesh> meshes;  // for draw
+};
+
+struct Shader : ::Shader {
+    Shader(const std::string& gltf_file, const std::string& name, Engine& engine)
+        : ::Shader(name, engine), model(&engine.vulkan, "assets/" + gltf_file) {
+        model.load();
+    }
+
+    virtual void attach() override { model.attachShader(vert_shader, frag_shader, vert_formats, uniforms, textures); }
+
+    virtual void draw() override { model.draw(); }
+
+    Model model;
 };
 }  // namespace gltf

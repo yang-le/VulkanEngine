@@ -21,8 +21,10 @@ struct Camera {
     }
 
     void rotate_pitch(float delta_y) {
+        constexpr float PITCH_MAX = glm::radians(89.0);
+
         pitch -= delta_y;
-        if (pitch_max) pitch = glm::clamp(pitch, -pitch_max, pitch_max);
+        pitch = glm::clamp(pitch, -PITCH_MAX, PITCH_MAX);
     }
 
     void rotate_yaw(float delta_x) { yaw += delta_x; }
@@ -53,7 +55,6 @@ struct Camera {
 
     float yaw = 0;
     float pitch = 0;
-    float pitch_max = 0;
     float fovy, fovx;
 
     glm::vec3 position{0};

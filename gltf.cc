@@ -97,6 +97,12 @@ Model::Model(Vulkan* vulkan, const std::string& filename) : vulkan(vulkan) {
     if (!warn.empty()) std::cerr << warn;
     if (!fileLoaded) throw std::runtime_error("Fail to load: " + filename);
 
+    // reserve spaces
+    textures.reserve(model.textures.size());
+    bufferViews.reserve(model.bufferViews.size());
+    nodes.reserve(model.nodes.size());
+    meshes.reserve(model.meshes.size());
+
     // maybe lazy load in the future
     loadTextures();
     loadBufferViews();

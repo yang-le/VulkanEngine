@@ -28,6 +28,11 @@
                 "CMAKE_RC_COMPILER": "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/Llvm/x64/bin/clang.exe",
                 "CMAKE_BUILD_TYPE": "Release"
             }
+        },
+        {
+            "name": "Visual Studio",
+            "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+            "binaryDir": "${sourceDir}/build/projects"
         }
     ],
     "buildPresets": [

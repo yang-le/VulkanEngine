@@ -4,6 +4,7 @@
 
 #include <bitset>
 
+#include "settings.h"
 #include "shader.h"
 
 struct CloudMesh : Shader {

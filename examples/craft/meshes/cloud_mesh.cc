@@ -1,4 +1,4 @@
-#include "meshes/cloud_mesh.h"
+#include "cloud_mesh.h"
 
 #include <glm/gtc/noise.hpp>
 

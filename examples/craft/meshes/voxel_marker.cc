@@ -1,4 +1,4 @@
-#include "meshes/voxel_marker.h"
+#include "voxel_marker.h"
 
 #include "engine.h"
 #include "world.h"

@@ -13,6 +13,8 @@
 
 class Engine {
    public:
+    Engine(uint32_t width, uint32_t height) : width(width), height(height) {}
+
     void run() {
         init();
         loop();
@@ -27,10 +29,11 @@ class Engine {
     void add_gui(std::unique_ptr<Gui> gui) { guis.push_back(std::move(gui)); }
     void set_player(std::unique_ptr<Player> player) { this->player = std::move(player); }
     void set_scene(std::unique_ptr<Scene> scene) { this->scene = std::move(scene); }
+    void set_bg_color(const vk::ClearColorValue& color) { vulkan.bgColor = color; }
+
     Player& get_player() { return *player; }
     Scene& get_scene() { return *scene; }
     bool get_key_state(size_t key) const { return key_state[key]; }
-
     float get_time() const { return std::chrono::duration_cast<std::chrono::duration<float>>(t - start_time).count(); }
     float get_delta_time() const { return dt.count(); }
 
@@ -58,6 +61,7 @@ class Engine {
         const Engine& engine;
     };
 
+    uint32_t width, height;
     GLFWwindow* window;
 
     std::chrono::system_clock::time_point start_time;

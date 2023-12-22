@@ -29,9 +29,8 @@ struct Mesh : gltf::Shader {
 
 int main(int argc, char* argv[]) {
     try {
-        Engine engine;
+        Engine engine(1600, 900);
         engine.init();
-        engine.vulkan.setBackgroudColor({});
 
         engine.add_mesh(std::make_unique<Mesh>(engine));
 

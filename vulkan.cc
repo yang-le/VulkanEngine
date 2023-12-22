@@ -147,10 +147,6 @@ Vulkan& Vulkan::setDeviceFeatures(const vk::PhysicalDeviceFeatures& features) {
     deviceFeatures = features;
     return *this;
 }
-Vulkan& Vulkan::setBackgroudColor(const vk::ClearColorValue& value) {
-    bgColor = value;
-    return *this;
-}
 
 void Vulkan::init(vk::Extent2D extent, std::function<vk::SurfaceKHR(const vk::Instance&)> getSurfaceKHR,
                   std::function<bool(const vk::PhysicalDevice&)> pickDevice) {

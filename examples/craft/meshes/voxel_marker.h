@@ -1,6 +1,6 @@
 #pragma once
 
-#include "meshes/chunk_mesh.h"
+#include "chunk_mesh.h"
 
 struct World;
 struct VoxelMarkerMesh : Shader {

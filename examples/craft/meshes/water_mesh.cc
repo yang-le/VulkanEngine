@@ -1,6 +1,7 @@
-#include "meshes/water_mesh.h"
+#include "water_mesh.h"
 
 #include "engine.h"
+#include "settings.h"
 
 WaterMesh::WaterMesh(Engine& engine) : Shader("water", engine) {
     vert_formats = {vk::Format::eR32G32B32Sfloat, vk::Format::eR32G32Sfloat};

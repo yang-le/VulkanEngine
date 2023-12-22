@@ -4,16 +4,15 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/gtc/matrix_transform.hpp>
 
-#include "settings.h"
-
 struct Camera {
-    Camera(glm::vec3 position, float yaw, float pitch) : position(position), yaw(yaw), pitch(pitch) {
-        up = glm::vec3(0, 1, 0);
-        right = glm::vec3(1, 0, 0);
-        forward = glm::vec3(0, 0, -1);
-
-        proj = glm::perspective(V_FOV, ASPECT_RATIO, ZNEAR, ZFAR);
-        view = glm::mat4(1);
+    Camera(float fovy, float aspect, float znear, float zfar)
+        : fovy(fovy),
+          fovx(2 * glm::atan(glm::tan(fovy * 0.5) * aspect)),
+          proj(glm::perspective(fovy, aspect, znear, zfar)) {
+        frustum.factor_y = 1.0 / std::cos(fovy * 0.5);
+        frustum.tan_y = std::tan(fovy * 0.5);
+        frustum.factor_x = 1.0 / std::cos(fovx * 0.5);
+        frustum.tan_x = std::tan(fovx * 0.5);
     }
 
     virtual void update() {
@@ -23,7 +22,7 @@ struct Camera {
 
     void rotate_pitch(float delta_y) {
         pitch -= delta_y;
-        pitch = glm::clamp(pitch, -PITCH_MAX, PITCH_MAX);
+        if (pitch_max) pitch = glm::clamp(pitch, -pitch_max, pitch_max);
     }
 
     void rotate_yaw(float delta_x) { yaw += delta_x; }
@@ -52,16 +51,22 @@ struct Camera {
         up = glm::normalize(glm::cross(right, forward));
     }
 
-    float yaw;
-    float pitch;
-    glm::vec3 position;
-    glm::vec3 up, right, forward;
-    glm::mat4 proj, view;
+    float yaw = 0;
+    float pitch = 0;
+    float pitch_max = 0;
+    float fovy, fovx;
+
+    glm::vec3 position{0};
+    glm::vec3 up{0, 1, 0};
+    glm::vec3 right{1, 0, 0};
+    glm::vec3 forward{0, 0, -1};
+    glm::mat4 proj;
+    glm::mat4 view = glm::mat4(1);
 
     struct Frustum {
-        const float factor_y = 1.0 / std::cos(V_FOV * 0.5);
-        const float tan_y = std::tan(V_FOV * 0.5);
-        const float factor_x = 1.0 / std::cos(H_FOV * 0.5);
-        const float tan_x = std::tan(H_FOV * 0.5);
+        float factor_y;
+        float tan_y;
+        float factor_x;
+        float tan_x;
     } frustum;
 };

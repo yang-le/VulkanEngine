@@ -48,7 +48,6 @@ class Vulkan {
     Vulkan& setDeviceLayers(const vk::ArrayProxyNoTemporaries<const char* const>& layers);
     Vulkan& setDeviceExtensions(const vk::ArrayProxyNoTemporaries<const char* const>& extensions);
     Vulkan& setDeviceFeatures(const vk::PhysicalDeviceFeatures& features);
-    Vulkan& setBackgroudColor(const vk::ClearColorValue& value);
 
     void init(vk::Extent2D extent, std::function<vk::SurfaceKHR(const vk::Instance&)> getSurfaceKHR,
               std::function<bool(const vk::PhysicalDevice&)> pickDevice = {});

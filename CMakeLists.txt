@@ -18,7 +18,7 @@ find_package(imgui CONFIG REQUIRED)
 
 include_directories(${CMAKE_SOURCE_DIR})
 
-add_library(vkegine vulkan.cc engine.cc player.cc shader.cc scene.cc gltf.cc settings.cc)
+add_library(vkegine vulkan.cc engine.cc player.cc shader.cc scene.cc gltf.cc)
 
 target_link_libraries(vkegine PUBLIC glfw)
 target_link_libraries(vkegine PUBLIC glm::glm)
@@ -27,22 +27,8 @@ target_link_libraries(vkegine PUBLIC Vulkan::Headers)
 target_link_libraries(vkegine PUBLIC GPUOpen::VulkanMemoryAllocator)
 target_link_libraries(vkegine PUBLIC imgui::imgui)
 
-add_executable(vkcraft
-    craft.cc world.cc meshes/chunk_mesh.cc meshes/voxel_marker.cc
-    meshes/water_mesh.cc meshes/cloud_mesh.cc
-)
+add_subdirectory(examples)
 
-target_link_libraries(vkcraft PRIVATE vkegine)
-
-add_executable(empty empty.cc)
-
-target_link_libraries(empty PRIVATE vkegine)
-
-add_executable(demo demo.cc)
-
-target_link_libraries(demo PRIVATE vkegine)
-
-install(TARGETS vkcraft empty demo DESTINATION .)
 if (${BUILD_SHARED_LIBS})
     install(TARGETS vkegine DESTINATION .)
 endif (${BUILD_SHARED_LIBS})
@@ -50,7 +36,7 @@ install(FILES ${CMAKE_BINARY_DIR}/vcpkg_installed/x64-windows/bin/glfw3.dll DEST
 install(DIRECTORY assets DESTINATION .)
 install(DIRECTORY shaders DESTINATION .)
 
-set(CPACK_PACKAGE_NAME "MyCraft")
+set(CPACK_PACKAGE_NAME "VulkanEngine")
 set(CPACK_PACKAGE_VERSION "1.0.0")
 set(CPACK_GENERATOR "ZIP")
 include(CPack)

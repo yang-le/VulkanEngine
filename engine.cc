@@ -6,22 +6,19 @@
 
 #include <iostream>
 
-#include "settings.h"
-
 void Engine::init() {
     start_time = std::chrono::system_clock::now();
     glfwInit();
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    window = glfwCreateWindow(WIN_WIDTH, WIN_HEIGHT, "VulkanEngine", nullptr, nullptr);
+    window = glfwCreateWindow(width, height, "VulkanEngine", nullptr, nullptr);
 
     uint32_t count;
     const char** extensions = glfwGetRequiredInstanceExtensions(&count);
     if (!extensions) throw std::runtime_error("GLFW cannot create Vulkan window surfaces!");
 
     vulkan.setInstanceExtensions({count, extensions});
-    vulkan.setBackgroudColor({BG_COLOR.r, BG_COLOR.g, BG_COLOR.b, 1.0f});
-    vulkan.init({WIN_WIDTH, WIN_HEIGHT}, [this](const vk::Instance& instance) {
+    vulkan.init({width, height}, [this](const vk::Instance& instance) {
         VkSurfaceKHR surfaceKHR = VK_NULL_HANDLE;
         glfwCreateWindowSurface(instance, window, nullptr, &surfaceKHR);
         return surfaceKHR;
@@ -178,14 +175,14 @@ void Engine::EngineGui::gui_draw() {
                 vk::apiVersionVariant(prop.apiVersion));
     ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate,
                 ImGui::GetIO().Framerate);
-    ImGui::Text("Chunk x: %d, y: %d, z: %d", (int)engine.player->position.x / CHUNK_SIZE,
-                (int)engine.player->position.y / CHUNK_SIZE, (int)engine.player->position.z / CHUNK_SIZE);
+    // ImGui::Text("Chunk x: %d, y: %d, z: %d", (int)engine.player->position.x / CHUNK_SIZE,
+    //             (int)engine.player->position.y / CHUNK_SIZE, (int)engine.player->position.z / CHUNK_SIZE);
     ImGui::Text("Player direction %d", (360 - (int)glm::degrees(engine.player->yaw) % 360) % 360);
     ImGui::Text("Player position x: %d, y: %d, z: %d", (int)engine.player->position.x, (int)engine.player->position.y,
                 (int)engine.player->position.z);
     // ImGui::Text("Voxel position x: %d, y: %d, z: %d", (int)engine.scene->world->voxel_handler->position.x,
     //             (int)engine.scene->world->voxel_handler->position.y,
     //             (int)engine.scene->world->voxel_handler->position.z);
-    ImGui::SliderFloat("Player speed", &PLAYER_SPEED, 1, 100);
+    ImGui::SliderFloat("Player speed", &engine.player->speed, 1, 100);
     ImGui::Checkbox("Demo Window", &show_demo_window);
 }

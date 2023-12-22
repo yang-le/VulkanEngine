@@ -3,6 +3,7 @@
 #include "engine.h"
 #include "meshes/cloud_mesh.h"
 #include "meshes/water_mesh.h"
+#include "settings.h"
 #include "world.h"
 
 struct McScene : Scene {
@@ -27,8 +28,11 @@ struct McScene : Scene {
     std::unique_ptr<World> world;
 };
 
-struct McPlayer : Player {
-    McPlayer(Engine& engine) : engine(engine), Player(engine, PLAYER_POS) {}
+struct McPlayer : public Player {
+    McPlayer(Engine& engine)
+        : engine(engine), Player(engine, PLAYER_SPEED, MOUSE_SENSITIVITY, V_FOV, ASPECT_RATIO, ZNEAR, ZFAR) {
+        position = PLAYER_POS;
+    }
     virtual void handle_events(int button, int action) override {
         if (action == GLFW_PRESS) {
             if (button == GLFW_MOUSE_BUTTON_LEFT) {
@@ -44,7 +48,8 @@ struct McPlayer : Player {
 
 int main(int argc, char* argv[]) {
     try {
-        Engine engine;
+        Engine engine(WIN_WIDTH, WIN_HEIGHT);
+        engine.set_bg_color({BG_COLOR.r, BG_COLOR.g, BG_COLOR.b, 1.0});
 
         engine.set_player(std::make_unique<McPlayer>(engine));
         engine.set_scene(std::make_unique<McScene>(engine));

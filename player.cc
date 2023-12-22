@@ -1,10 +1,9 @@
 #include "player.h"
 
 #include "engine.h"
-#include "world.h"
 
 void Player::keyboard_control() {
-    auto ds = PLAYER_SPEED * engine.get_delta_time();
+    auto ds = speed * engine.get_delta_time();
     if (engine.get_key_state(GLFW_KEY_W)) move_forward(ds);
     if (engine.get_key_state(GLFW_KEY_S)) move_back(ds);
     if (engine.get_key_state(GLFW_KEY_D)) move_right(ds);
@@ -14,6 +13,6 @@ void Player::keyboard_control() {
 }
 
 void Player::mouse_control() {
-    if (engine.mouse_dx) rotate_yaw(engine.mouse_dx * MOUSE_SENSITIVITY);
-    if (engine.mouse_dy) rotate_pitch(engine.mouse_dy * MOUSE_SENSITIVITY);
+    if (engine.mouse_dx) rotate_yaw(engine.mouse_dx * mouse_sensitivity);
+    if (engine.mouse_dy) rotate_pitch(engine.mouse_dy * mouse_sensitivity);
 }

@@ -9,13 +9,13 @@ namespace {
 int get_height(glm::vec2 pos) {
     // amplitude
     float a1 = CENTER_Y;
-    float a2 = a1 * 0.5, a4 = a1 * 0.25, a8 = a1 * 0.125;
+    float a2 = a1 * 0.5f, a4 = a1 * 0.25f, a8 = a1 * 0.125f;
 
     // frequency
-    float f1 = 0.005;
+    float f1 = 0.005f;
     float f2 = f1 * 2, f4 = f1 * 4, f8 = f1 * 8;
 
-    if (glm::simplex(0.1f * pos) < 0) a1 /= 1.07;
+    if (glm::simplex(0.1f * pos) < 0) a1 /= 1.07f;
 
     float height = 0;
     height += glm::simplex(f1 * pos) * a1 + a1;
@@ -25,10 +25,10 @@ int get_height(glm::vec2 pos) {
     height = std::max(height, 1.0f);
 
     // island mask
-    float island = 1.0f / (std::pow(0.0025 * (std::hypot(pos.x - CENTER_XZ, pos.y - CENTER_XZ)), 20) + 0.0001);
+    float island = 1.0f / (std::pow(0.0025f * (std::hypot(pos.x - CENTER_XZ, pos.y - CENTER_XZ)), 20.0f) + 0.0001f);
     height *= std::min(island, 1.0f);
 
-    return height;
+    return (int)height;
 }
 
 inline int get_index(int x, int y, int z) { return x + CHUNK_SIZE * z + CHUNK_AREA * y; }
@@ -52,7 +52,7 @@ void place_tree(std::array<uint8_t, CHUNK_VOL>& voxels, int x, int y, int z, int
         static std::uniform_real_distribution<float> uniform_dist(0, 2);
 
         int k = iy % 2;
-        int rng = uniform_dist(e);
+        int rng = (int)uniform_dist(e);
         for (int ix = -TREE_H_WIDTH + m; ix < TREE_H_WIDTH - m * rng; ++ix)
             for (int iz = -TREE_H_WIDTH + m * rng; iz < TREE_H_WIDTH - m; ++iz)
                 if ((ix + iz) % 4) voxels[get_index(x + ix + k, y + iy, z + iz + k)] = LEAVES;
@@ -248,9 +248,9 @@ std::vector<ChunkMesh::Vertex> ChunkMesh::build_mesh() {
 
                 // voxel world position
                 auto chunk_pos = position * (float)CHUNK_SIZE;
-                int wx = x + chunk_pos.x;
-                int wy = y + chunk_pos.y;
-                int wz = z + chunk_pos.z;
+                int wx = x + (int)chunk_pos.x;
+                int wy = y + (int)chunk_pos.y;
+                int wz = z + (int)chunk_pos.z;
 
                 Vertex v0, v1, v2, v3;
 

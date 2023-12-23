@@ -2,10 +2,6 @@
 
 #include <glm/glm.hpp>
 
-struct Setting {
-    static float player_speed;
-};
-
 // resolution
 constexpr int WIN_WIDTH = 1600;
 constexpr int WIN_HEIGHT = 900;
@@ -21,7 +17,7 @@ constexpr int CHUNK_SIZE = 48;
 constexpr int H_CHUNK_SIZE = CHUNK_SIZE / 2;
 constexpr int CHUNK_AREA = CHUNK_SIZE * CHUNK_SIZE;
 constexpr int CHUNK_VOL = CHUNK_AREA * CHUNK_SIZE;
-constexpr float CHUNK_SPHERE_RADIUS = H_CHUNK_SIZE * 1.732050807569;
+constexpr float CHUNK_SPHERE_RADIUS = H_CHUNK_SIZE * 1.732050807569f;
 
 // world
 constexpr int WORLD_W = 20, WORLD_H = 2;
@@ -36,16 +32,13 @@ constexpr int CENTER_Y = WORLD_H * H_CHUNK_SIZE;
 // camera
 constexpr float ASPECT_RATIO = (float)WIN_WIDTH / WIN_HEIGHT;
 constexpr float FOV_DEG = 50;
-constexpr float V_FOV = glm::radians(FOV_DEG);                            // vertical FOV
-const float H_FOV = 2 * glm::atan(glm::tan(V_FOV * 0.5) * ASPECT_RATIO);  // horizontal FOV
-constexpr float ZNEAR = 0.1;
-constexpr float ZFAR = 2000.0;
-constexpr float PITCH_MAX = glm::radians(89.0);
+constexpr float V_FOV = glm::radians(FOV_DEG);  // vertical FOV
+constexpr float ZNEAR = 0.1f;
+constexpr float ZFAR = 2000.0f;
 
 // player
-#define PLAYER_SPEED Setting::player_speed
 constexpr glm::vec3 PLAYER_POS = glm::vec3(CENTER_XZ, WORLD_H* CHUNK_SIZE, CENTER_XZ);
-constexpr float MOUSE_SENSITIVITY = 0.002;
+constexpr float MOUSE_SENSITIVITY = 0.002f;
 
 // colors
 constexpr glm::vec3 BG_COLOR = glm::vec3(0.58, 0.83, 0.99);
@@ -67,7 +60,7 @@ constexpr int GRASS_LVL = 8;
 constexpr int SAND_LVL = 7;
 
 // tree settings
-constexpr float TREE_PROBABILITY = 0.02;
+constexpr float TREE_PROBABILITY = 0.02f;
 constexpr int TREE_WIDTH = 4, TREE_HEIGHT = 8;
 constexpr int TREE_H_WIDTH = TREE_WIDTH / 2, TREE_H_HEIGHT = TREE_HEIGHT / 2;
 

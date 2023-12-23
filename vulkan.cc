@@ -777,7 +777,7 @@ uint32_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const 
     vk::PipelineDynamicStateCreateInfo pipelineDynamicStateCreateInfo({}, dynamicStates);
 
     pipelineLayout() = device.createPipelineLayout(
-        {{}, 1, &descriptorSetLayout(), pushConstant.size ? 1ul : 0, pushConstant.size ? &pushConstant : nullptr});
+        {{}, 1, &descriptorSetLayout(), pushConstant.size ? 1u : 0, pushConstant.size ? &pushConstant : nullptr});
 
     vk::GraphicsPipelineCreateInfo graphicPipelineCreateInfo(
         {}, pipelineShaderStageCreateInfos, &vertexInfo, &pipelineInputAssemblyStateCreateInfo, nullptr,

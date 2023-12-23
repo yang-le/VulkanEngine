@@ -23,19 +23,19 @@ VoxelMarkerMesh::VoxelMarkerMesh(Engine& engine, const World& world)
 void VoxelMarkerMesh::init() {
     Shader::init();
 
-    constexpr std::array<std::tuple<float, float, float>, 8> vertices = {std::tuple<float, float, float>{0, 0, 1},
-                                                                         {1, 0, 1},
-                                                                         {1, 1, 1},
-                                                                         {0, 1, 1},
-                                                                         {0, 1, 0},
-                                                                         {0, 0, 0},
-                                                                         {1, 0, 0},
-                                                                         {1, 1, 0}};
+    constexpr std::array<std::tuple<float, float, float>, 8> vertices = {std::tuple<float, float, float>{0.0f, 0.0f, 1.0f},
+                                                                         {1.0f, 0.0f, 1.0f},
+                                                                         {1.0f, 1.0f, 1.0f},
+                                                                         {0.0f, 1.0f, 1.0f},
+                                                                         {0.0f, 1.0f, 0.0f},
+                                                                         {0.0f, 0.0f, 0.0f},
+                                                                         {1.0f, 0.0f, 0.0f},
+                                                                         {1.0f, 1.0f, 0.0f}};
     constexpr std::array<size_t, 36> indices = {0, 2, 3, 0, 1, 2, 1, 7, 2, 1, 6, 7, 6, 5, 4, 4, 7, 6,
                                                 3, 4, 5, 3, 5, 0, 3, 7, 4, 3, 2, 7, 0, 6, 1, 0, 5, 6};
 
     constexpr std::array<std::tuple<float, float>, 4> tex_coord_vertices = {
-        std::tuple<float, float>{0, 0}, {1, 0}, {1, 1}, {0, 1}};
+        std::tuple<float, float>{0.0f, 0.0f}, {1.0f, 0.0f}, {1.0f, 1.0f}, {0.0f, 1.0f}};
     constexpr std::array<size_t, 36> tex_coord_indices = {0, 2, 3, 0, 1, 2, 0, 2, 3, 0, 1, 2, 0, 1, 2, 2, 3, 0,
                                                           2, 3, 0, 2, 0, 1, 0, 2, 3, 0, 1, 2, 3, 1, 2, 3, 0, 1};
 
@@ -164,31 +164,31 @@ bool VoxelMarkerMesh::ray_cast() {
             voxel_world_pos = current_voxel_pos;
 
             if (step_dir == 0)
-                voxel_normal.x = -sign.x;
+                voxel_normal.x = -(int)sign.x;
             else if (step_dir == 1)
-                voxel_normal.y = -sign.y;
+                voxel_normal.y = -(int)sign.y;
             else
-                voxel_normal.z = -sign.z;
+                voxel_normal.z = -(int)sign.z;
 
             return true;
         }
         if (max_x < max_y) {
             if (max_x < max_z) {
-                current_voxel_pos.x += sign.x;
+                current_voxel_pos.x += (int)sign.x;
                 max_x += dx;
                 step_dir = 0;
             } else {
-                current_voxel_pos.z += sign.z;
+                current_voxel_pos.z += (int)sign.z;
                 max_z += dz;
                 step_dir = 2;
             }
         } else {
             if (max_y < max_z) {
-                current_voxel_pos.y += sign.y;
+                current_voxel_pos.y += (int)sign.y;
                 max_y += dy;
                 step_dir = 1;
             } else {
-                current_voxel_pos.z += sign.z;
+                current_voxel_pos.z += (int)sign.z;
                 max_z += dz;
                 step_dir = 2;
             }

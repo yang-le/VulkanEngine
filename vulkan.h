@@ -52,14 +52,14 @@ class Vulkan {
     void init(vk::Extent2D extent, std::function<vk::SurfaceKHR(const vk::Instance&)> getSurfaceKHR,
               std::function<bool(const vk::PhysicalDevice&)> pickDevice = {});
     uint32_t attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
-                        const Buffer& vertex, const std::vector<vk::Format>& vertexFormats,
-                        const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures,
-                        vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack, bool autoDestroy = true);
+                          const Buffer& vertex, const std::vector<vk::Format>& vertexFormats,
+                          const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures,
+                          vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack, bool autoDestroy = true);
     uint32_t attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
-                        const std::vector<uint32_t>& vertexStrides, const std::vector<vk::Format>& vertexFormats,
-                        const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures,
-                        vk::PrimitiveTopology primitiveTopology,
-                        vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack, bool autoDestroy = true);
+                          const std::vector<uint32_t>& vertexStrides, const std::vector<vk::Format>& vertexFormats,
+                          const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures,
+                          vk::PrimitiveTopology primitiveTopology,
+                          vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack, bool autoDestroy = true);
     unsigned int renderBegin();
     void updateVertex(uint32_t i, const Buffer& vertex);
     void draw(uint32_t i);
@@ -100,15 +100,16 @@ class Vulkan {
     void initFrameBuffers();
     void initDescriptorSet(const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures);
     uint32_t initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
-                        uint32_t vertexStride, const std::vector<vk::Format>& vertexFormats, vk::CullModeFlags cullMode,
-                        bool depthBuffered = true);
+                          uint32_t vertexStride, const std::vector<vk::Format>& vertexFormats,
+                          vk::CullModeFlags cullMode, bool depthBuffered = true);
     uint32_t initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
-                        const std::vector<uint32_t>& vertexStrides, const std::vector<vk::Format>& vertexFormats,
-                        vk::CullModeFlags cullMode, vk::PrimitiveTopology primitiveTopology, bool depthBuffered = true);
+                          const std::vector<uint32_t>& vertexStrides, const std::vector<vk::Format>& vertexFormats,
+                          vk::CullModeFlags cullMode, vk::PrimitiveTopology primitiveTopology,
+                          bool depthBuffered = true);
     uint32_t initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
-                        const vk::PipelineVertexInputStateCreateInfo& vertexInfo, vk::CullModeFlags cullMode,
-                        vk::PrimitiveTopology primitiveTopology, bool depthBuffered,
-                        const vk::PushConstantRange& pushConstant = {});
+                          const vk::PipelineVertexInputStateCreateInfo& vertexInfo, vk::CullModeFlags cullMode,
+                          vk::PrimitiveTopology primitiveTopology, bool depthBuffered,
+                          const vk::PushConstantRange& pushConstant = {});
     void destroySwapChain();
 
     //
@@ -147,20 +148,40 @@ class Vulkan {
     vk::SwapchainKHR swapChain;
     std::vector<vk::Image> swapChainImages;
     std::vector<vk::ImageView> swapChainImageViews;
-    std::vector<vk::DescriptorSetLayout> descriptorSetLayouts;
-    std::vector<vk::DescriptorPool> descriptorPools;
-    std::vector<vk::DescriptorSet> descriptorSets;
     vk::Image depthImage;
     VmaAllocation depthMemory;
     vk::ImageView depthImageView;
-    std::vector<Buffer> vertexBuffers;
-    std::map<size_t, Buffer> indexBuffers;
     std::vector<vk::Framebuffer> framebuffers;
     vk::RenderPass renderPass;
-    std::vector<vk::PipelineLayout> pipelineLayouts;
-    std::vector<vk::Pipeline> graphicsPipelines;
     vk::ClearColorValue bgColor;
     uint32_t imageCount;
+
+    struct DrawResource {
+        Buffer vertexBuffer = {};
+        vk::DescriptorSetLayout descriptorSetLayout = {};
+        vk::DescriptorPool descriptorPool = {};
+        vk::DescriptorSet descriptorSet = {};
+        vk::PipelineLayout pipelineLayout = {};
+        vk::Pipeline graphicsPipeline = {};
+    };
+    std::vector<DrawResource> drawResources;
+
+    Buffer& vertexBuffer(size_t i = -1) { return drawResources[i == -1 ? drawResources.size() - 1 : i].vertexBuffer; }
+    vk::DescriptorSetLayout& descriptorSetLayout(size_t i = -1) {
+        return drawResources[i == -1 ? drawResources.size() - 1 : i].descriptorSetLayout;
+    }
+    vk::DescriptorPool& descriptorPool(size_t i = -1) {
+        return drawResources[i == -1 ? drawResources.size() - 1 : i].descriptorPool;
+    }
+    vk::DescriptorSet& descriptorSet(size_t i = -1) {
+        return drawResources[i == -1 ? drawResources.size() - 1 : i].descriptorSet;
+    }
+    vk::PipelineLayout& pipelineLayout(size_t i = -1) {
+        return drawResources[i == -1 ? drawResources.size() - 1 : i].pipelineLayout;
+    }
+    vk::Pipeline& graphicsPipeline(size_t i = -1) {
+        return drawResources[i == -1 ? drawResources.size() - 1 : i].graphicsPipeline;
+    }
 
     struct FrameInFlight {
         static constexpr int FRAME_IN_FLIGHT = 3;

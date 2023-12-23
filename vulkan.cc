@@ -99,10 +99,12 @@ Vulkan::~Vulkan() {
         vmaDestroyAllocator(vmaAllocator);
 
         device.destroyRenderPass(renderPass);
-        for (auto& pipeline : graphicsPipelines) device.destroyPipeline(pipeline);
-        for (auto& pipelineLayout : pipelineLayouts) device.destroyPipelineLayout(pipelineLayout);
-        for (auto& pool : descriptorPools) device.destroyDescriptorPool(pool);
-        for (auto& layout : descriptorSetLayouts) device.destroyDescriptorSetLayout(layout);
+        for (auto& drawResource : drawResources) {
+            device.destroyPipeline(drawResource.graphicsPipeline);
+            device.destroyPipelineLayout(drawResource.pipelineLayout);
+            device.destroyDescriptorPool(drawResource.descriptorPool);
+            device.destroyDescriptorSetLayout(drawResource.descriptorSetLayout);
+        }
         device.freeCommandBuffers(commandPool, commandBuffer);
         device.destroyCommandPool(commandPool);
         device.destroy();
@@ -162,12 +164,13 @@ void Vulkan::init(vk::Extent2D extent, std::function<vk::SurfaceKHR(const vk::In
 };
 
 uint32_t Vulkan::attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
-                            const Buffer& vertex, const std::vector<vk::Format>& vertexFormats,
-                            const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures,
-                            vk::CullModeFlags cullMode, bool autoDestroy) {
-    vertexBuffers.push_back(vertex);
+                              const Buffer& vertex, const std::vector<vk::Format>& vertexFormats,
+                              const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures,
+                              vk::CullModeFlags cullMode, bool autoDestroy) {
+    drawResources.push_back({});
+    vertexBuffer() = vertex;
 
-    initDescriptorSet(uniforms, textures);
+    if (uniforms.size() || textures.size()) initDescriptorSet(uniforms, textures);
     uint32_t drawId = initPipeline(vertexShaderModule, fragmentShaderModule, vertex.stride, vertexFormats, cullMode);
 
     if (autoDestroy) {
@@ -179,12 +182,14 @@ uint32_t Vulkan::attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderMod
 }
 
 uint32_t Vulkan::attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
-                            const std::vector<uint32_t>& vertexStrides, const std::vector<vk::Format>& vertexFormats,
-                            const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures,
-                            vk::PrimitiveTopology primitiveTopology, vk::CullModeFlags cullMode, bool autoDestroy) {
-    initDescriptorSet(uniforms, textures);
+                              const std::vector<uint32_t>& vertexStrides, const std::vector<vk::Format>& vertexFormats,
+                              const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures,
+                              vk::PrimitiveTopology primitiveTopology, vk::CullModeFlags cullMode, bool autoDestroy) {
+    drawResources.push_back({});
+
+    if (uniforms.size() || textures.size()) initDescriptorSet(uniforms, textures);
     uint32_t drawId = initPipeline(vertexShaderModule, fragmentShaderModule, vertexStrides, vertexFormats, cullMode,
-                                 primitiveTopology);
+                                   primitiveTopology);
 
     if (autoDestroy) {
         destroyShaderModule(fragmentShaderModule);
@@ -223,25 +228,27 @@ unsigned int Vulkan::renderBegin() {
     return currentBuffer.value;
 }
 
-void Vulkan::updateVertex(uint32_t i, const Buffer& vertex) { vertexBuffers[i] = vertex; }
+void Vulkan::updateVertex(uint32_t i, const Buffer& vertex) { vertexBuffer(i) = vertex; }
 
 void Vulkan::draw(uint32_t i) {
-    frame.commandBuffer().bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipelines[i]);
-    frame.commandBuffer().bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayouts[i], 0, descriptorSets[i],
-                                             nullptr);
-    frame.commandBuffer().bindVertexBuffers(0, vertexBuffers[i].buffer, {0});
-    frame.commandBuffer().draw((uint32_t)vertexBuffers[i].size / vertexBuffers[i].stride, 1, 0, 0);
+    frame.commandBuffer().bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipeline(i));
+    if (descriptorSet(i))
+        frame.commandBuffer().bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout(i), 0,
+                                                 descriptorSet(i), nullptr);
+    frame.commandBuffer().bindVertexBuffers(0, vertexBuffer(i).buffer, {0});
+    frame.commandBuffer().draw((uint32_t)vertexBuffer(i).size / vertexBuffer(i).stride, 1, 0, 0);
 }
 
 void Vulkan::drawIndex(uint32_t i, const vk::Buffer& index, vk::DeviceSize indexOffset, vk::IndexType indexType,
                        uint32_t count, const std::vector<vk::Buffer>& vertex,
                        const std::vector<vk::DeviceSize>& vertexOffset) {
-    frame.commandBuffer().bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipelines[i]);
-    frame.commandBuffer().bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayouts[i], 0, descriptorSets[i],
-                                             nullptr);
+    frame.commandBuffer().bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipeline(i));
+    if (descriptorSet(i))
+        frame.commandBuffer().bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout(i), 0,
+                                                 descriptorSet(i), nullptr);
     frame.commandBuffer().bindVertexBuffers(0, vertex, vertexOffset);
     frame.commandBuffer().bindIndexBuffer(index, indexOffset, indexType);
-    frame.commandBuffer().pushConstants<uint32_t>(pipelineLayouts[i], vk::ShaderStageFlagBits::eAll, 0, i);
+    frame.commandBuffer().pushConstants<uint32_t>(pipelineLayout(i), vk::ShaderStageFlagBits::eAll, 0, i);
     frame.commandBuffer().drawIndexed(count, 1, 0, 0, 0);
 }
 
@@ -266,7 +273,7 @@ void Vulkan::renderEnd(unsigned int currentBuffer) {
 
 void Vulkan::render() {
     auto currentBuffer = renderBegin();
-    for (unsigned i = 0; i < graphicsPipelines.size(); ++i) draw(i);
+    for (unsigned i = 0; i < drawResources.size(); ++i) draw(i);
     renderEnd(currentBuffer);
 }
 
@@ -377,16 +384,16 @@ Vulkan::Texture Vulkan::createTexture(vk::Extent2D extent, const void* data, uin
     commandBuffer.begin(vk::CommandBufferBeginInfo());
     if (needStaging) {
         setImageLayout(commandBuffer, texture.image, format, vk::ImageLayout::eUndefined,
-                       vk::ImageLayout::eTransferDstOptimal);
+                       vk::ImageLayout::eTransferDstOptimal, 0, layers);
         vk::BufferImageCopy copyRegion(0, extent.width, extent.height, {vk::ImageAspectFlagBits::eColor, 0, 0, layers},
                                        vk::Offset3D(0, 0, 0), vk::Extent3D(extent, 1));
         commandBuffer.copyBufferToImage(texture.stagingBuffer, texture.image, vk::ImageLayout::eTransferDstOptimal,
                                         copyRegion);
         setImageLayout(commandBuffer, texture.image, format, vk::ImageLayout::eTransferDstOptimal,
-                       vk::ImageLayout::eTransferSrcOptimal);
+                       vk::ImageLayout::eTransferSrcOptimal, 0, layers);
     } else {
         setImageLayout(commandBuffer, texture.image, format, vk::ImageLayout::ePreinitialized,
-                       vk::ImageLayout::eTransferSrcOptimal);
+                       vk::ImageLayout::eTransferSrcOptimal, 0, layers);
     }
     for (uint32_t i = 1; i < mipLevels; ++i) {
         vk::ImageBlit imageBlit({vk::ImageAspectFlagBits::eColor, i - 1, 0, layers},
@@ -617,10 +624,19 @@ void Vulkan::initDepthBuffer() {
 }
 
 void Vulkan::initDescriptorSet(const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures) {
+    assert(uniforms.size() || textures.size());
+
     std::array<vk::DescriptorPoolSize, 2> poolSizes;
     poolSizes[0] = {vk::DescriptorType::eUniformBuffer, (uint32_t)uniforms.size()};
     poolSizes[1] = {vk::DescriptorType::eCombinedImageSampler, (uint32_t)textures.size()};
-    descriptorPools.push_back(device.createDescriptorPool({{}, 1, poolSizes}));
+    descriptorPool() = device.createDescriptorPool({{},
+                                                    1,
+                                                    poolSizes[0].descriptorCount == 0   ? 1u
+                                                    : poolSizes[1].descriptorCount == 0 ? 1u
+                                                                                        : 2u,
+                                                    poolSizes[0].descriptorCount == 0   ? &poolSizes[1]
+                                                    : poolSizes[1].descriptorCount == 0 ? &poolSizes[0]
+                                                                                        : poolSizes.data()});
 
     std::vector<vk::DescriptorSetLayoutBinding> descriptorSetLayoutBindings;
     descriptorSetLayoutBindings.reserve(uniforms.size() + textures.size());
@@ -630,12 +646,10 @@ void Vulkan::initDescriptorSet(const std::map<int, Buffer>& uniforms, const std:
     for (auto texture : textures)
         descriptorSetLayoutBindings.emplace_back(texture.first, vk::DescriptorType::eCombinedImageSampler, 1,
                                                  texture.second.stage);
-    descriptorSetLayouts.push_back(device.createDescriptorSetLayout({{}, descriptorSetLayoutBindings}));
+    descriptorSetLayout() = device.createDescriptorSetLayout({{}, descriptorSetLayoutBindings});
 
-    vk::DescriptorSet descriptorSet;
-    vk::DescriptorSetAllocateInfo descriptorSetAllocateInfo(descriptorPools.back(), 1, &descriptorSetLayouts.back());
-    device.allocateDescriptorSets(&descriptorSetAllocateInfo, &descriptorSet);
-    descriptorSets.push_back(descriptorSet);
+    vk::DescriptorSetAllocateInfo descriptorSetAllocateInfo(descriptorPool(), 1, &descriptorSetLayout());
+    device.allocateDescriptorSets(&descriptorSetAllocateInfo, &descriptorSet());
 
     std::vector<vk::DescriptorBufferInfo> descriptorBufferInfo;
     descriptorBufferInfo.reserve(uniforms.size());
@@ -646,14 +660,14 @@ void Vulkan::initDescriptorSet(const std::map<int, Buffer>& uniforms, const std:
 
     for (const auto& uniform : uniforms) {
         descriptorBufferInfo.emplace_back(uniform.second.buffer, 0, uniform.second.size);
-        writeDescriptorSet.emplace_back(descriptorSets.back(), uniform.first, 0, 1, vk::DescriptorType::eUniformBuffer,
+        writeDescriptorSet.emplace_back(descriptorSet(), uniform.first, 0, 1, vk::DescriptorType::eUniformBuffer,
                                         nullptr, &descriptorBufferInfo.back());
     }
     for (const auto& texture : textures) {
         descriptorImageInfo.emplace_back(texture.second.sampler, texture.second.view,
                                          vk::ImageLayout::eShaderReadOnlyOptimal);
-        writeDescriptorSet.emplace_back(descriptorSets.back(), texture.first, 0, 1,
-                                        vk::DescriptorType::eCombinedImageSampler, &descriptorImageInfo.back());
+        writeDescriptorSet.emplace_back(descriptorSet(), texture.first, 0, 1, vk::DescriptorType::eCombinedImageSampler,
+                                        &descriptorImageInfo.back());
     }
 
     device.updateDescriptorSets(writeDescriptorSet, nullptr);
@@ -694,8 +708,8 @@ void Vulkan::initFrameBuffers() {
 }
 
 uint32_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
-                            uint32_t vertexStride, const std::vector<vk::Format>& vertexFormats,
-                            vk::CullModeFlags cullMode, bool depthBuffered) {
+                              uint32_t vertexStride, const std::vector<vk::Format>& vertexFormats,
+                              vk::CullModeFlags cullMode, bool depthBuffered) {
     vk::VertexInputBindingDescription vertexInputBindingDescription(0, vertexStride);
 
     std::vector<vk::VertexInputAttributeDescription> vertexInputAtrributeDescriptions;
@@ -713,8 +727,8 @@ uint32_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const 
 }
 
 uint32_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
-                            const std::vector<uint32_t>& vertexStrides, const std::vector<vk::Format>& vertexFormats,
-                            vk::CullModeFlags cullMode, vk::PrimitiveTopology primitiveTopology, bool depthBuffered) {
+                              const std::vector<uint32_t>& vertexStrides, const std::vector<vk::Format>& vertexFormats,
+                              vk::CullModeFlags cullMode, vk::PrimitiveTopology primitiveTopology, bool depthBuffered) {
     std::vector<vk::VertexInputBindingDescription> vertexInputBindingDescriptions;
     vertexInputBindingDescriptions.reserve(vertexStrides.size());
     for (int i = 0; i < vertexStrides.size(); ++i) vertexInputBindingDescriptions.emplace_back(i, vertexStrides[i]);
@@ -731,9 +745,9 @@ uint32_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const 
 }
 
 uint32_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
-                            const vk::PipelineVertexInputStateCreateInfo& vertexInfo, vk::CullModeFlags cullMode,
-                            vk::PrimitiveTopology primitiveTopology, bool depthBuffered,
-                            const vk::PushConstantRange& pushConstant) {
+                              const vk::PipelineVertexInputStateCreateInfo& vertexInfo, vk::CullModeFlags cullMode,
+                              vk::PrimitiveTopology primitiveTopology, bool depthBuffered,
+                              const vk::PushConstantRange& pushConstant) {
     std::array<vk::PipelineShaderStageCreateInfo, 2> pipelineShaderStageCreateInfos = {
         vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eVertex, vertexShaderModule, "main"),
         vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eFragment, fragmentShaderModule, "main")};
@@ -762,26 +776,20 @@ uint32_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const 
     std::array<vk::DynamicState, 2> dynamicStates = {vk::DynamicState::eViewport, vk::DynamicState::eScissor};
     vk::PipelineDynamicStateCreateInfo pipelineDynamicStateCreateInfo({}, dynamicStates);
 
-    vk::PipelineLayout pipelineLayout = device.createPipelineLayout({{},
-                                                                     1,
-                                                                     &descriptorSetLayouts.back(),
-                                                                     pushConstant.size ? 1ul : 0,
-                                                                     pushConstant.size ? &pushConstant : nullptr});
-    pipelineLayouts.push_back(pipelineLayout);
+    pipelineLayout() = device.createPipelineLayout(
+        {{}, 1, &descriptorSetLayout(), pushConstant.size ? 1ul : 0, pushConstant.size ? &pushConstant : nullptr});
 
     vk::GraphicsPipelineCreateInfo graphicPipelineCreateInfo(
         {}, pipelineShaderStageCreateInfos, &vertexInfo, &pipelineInputAssemblyStateCreateInfo, nullptr,
         &pipelineViewportStateCreateInfo, &pipelineRasterizationStateCreateInfo, &pipelineMultisampleStateCreateInfo,
         &pipelineDepthStencilStateCreateInfo, &pipelineColorBlendStateCreateInfo, &pipelineDynamicStateCreateInfo,
-        pipelineLayout, renderPass);
+        pipelineLayout(), renderPass);
 
     vk::Result result;
-    vk::Pipeline pipeline;
-    std::tie(result, pipeline) = device.createGraphicsPipeline(nullptr, graphicPipelineCreateInfo);
+    std::tie(result, graphicsPipeline()) = device.createGraphicsPipeline(nullptr, graphicPipelineCreateInfo);
     assert(result == vk::Result::eSuccess);
 
-    graphicsPipelines.push_back(pipeline);
-    return (uint32_t)graphicsPipelines.size() - 1;
+    return (uint32_t)drawResources.size() - 1;
 }
 
 void Vulkan::destroySwapChain() {

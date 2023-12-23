@@ -79,7 +79,8 @@ void Engine::init() {
 
     // init for imgui
     vk::DescriptorPoolSize pool_size = {vk::DescriptorType::eCombinedImageSampler, 1};
-    imgui_pool = vulkan.device.createDescriptorPool({{}, 1, 1, &pool_size});
+    imgui_pool =
+        vulkan.device.createDescriptorPool({vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet, 1, 1, &pool_size});
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -118,6 +119,7 @@ void Engine::loop() {
         glfwPollEvents();
         render();
     }
+    vulkan.device.waitIdle();
 }
 
 void Engine::render() {

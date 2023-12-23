@@ -107,7 +107,8 @@ class Vulkan {
                         vk::CullModeFlags cullMode, vk::PrimitiveTopology primitiveTopology, bool depthBuffered = true);
     size_t initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
                         const vk::PipelineVertexInputStateCreateInfo& vertexInfo, vk::CullModeFlags cullMode,
-                        vk::PrimitiveTopology primitiveTopology, bool depthBuffered);
+                        vk::PrimitiveTopology primitiveTopology, bool depthBuffered,
+                        const vk::PushConstantRange& pushConstant = {});
     void destroySwapChain();
 
     //

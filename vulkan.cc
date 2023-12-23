@@ -241,6 +241,7 @@ void Vulkan::drawIndex(size_t i, const vk::Buffer& index, vk::DeviceSize indexOf
                                              nullptr);
     frame.commandBuffer().bindVertexBuffers(0, vertex, vertexOffset);
     frame.commandBuffer().bindIndexBuffer(index, indexOffset, indexType);
+    frame.commandBuffer().pushConstants<uint32_t>(pipelineLayouts[i], vk::ShaderStageFlagBits::eAll, 0, i);
     frame.commandBuffer().drawIndexed(count, 1, 0, 0, 0);
 }
 
@@ -722,14 +723,16 @@ size_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const vk
     for (uint32_t i = 0; i < vertexFormats.size(); ++i)
         vertexInputAtrributeDescriptions.emplace_back(i, i, vertexFormats[i], 0);
 
+    assert(4 <= physicalDevice.getProperties().limits.maxPushConstantsSize);
     return initPipeline(vertexShaderModule, fragmentShaderModule,
                         {{}, vertexInputBindingDescriptions, vertexInputAtrributeDescriptions}, cullMode,
-                        primitiveTopology, depthBuffered);
+                        primitiveTopology, depthBuffered, {vk::ShaderStageFlagBits::eAll, 0, 4});
 }
 
 size_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
                             const vk::PipelineVertexInputStateCreateInfo& vertexInfo, vk::CullModeFlags cullMode,
-                            vk::PrimitiveTopology primitiveTopology, bool depthBuffered) {
+                            vk::PrimitiveTopology primitiveTopology, bool depthBuffered,
+                            const vk::PushConstantRange& pushConstant) {
     std::array<vk::PipelineShaderStageCreateInfo, 2> pipelineShaderStageCreateInfos = {
         vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eVertex, vertexShaderModule, "main"),
         vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eFragment, fragmentShaderModule, "main")};
@@ -758,7 +761,11 @@ size_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const vk
     std::array<vk::DynamicState, 2> dynamicStates = {vk::DynamicState::eViewport, vk::DynamicState::eScissor};
     vk::PipelineDynamicStateCreateInfo pipelineDynamicStateCreateInfo({}, dynamicStates);
 
-    vk::PipelineLayout pipelineLayout = device.createPipelineLayout({{}, descriptorSetLayouts.back()});
+    vk::PipelineLayout pipelineLayout = device.createPipelineLayout({{},
+                                                                     1,
+                                                                     &descriptorSetLayouts.back(),
+                                                                     pushConstant.size ? 1ul : 0,
+                                                                     pushConstant.size ? &pushConstant : nullptr});
     pipelineLayouts.push_back(pipelineLayout);
 
     vk::GraphicsPipelineCreateInfo graphicPipelineCreateInfo(

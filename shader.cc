@@ -98,13 +98,13 @@ void Shader::write_texture(int binding, std::initializer_list<std::string> filen
     }
 
     // stack data
-    int layers = index.size() / 3 + 1;
+    uint32_t layers = (uint32_t)index.size() / 3 + 1;
     std::vector<stbi_uc> data(3 * 4 * width * height * layers);
 
     auto it = index.begin();
-    for (int i = 1; i < layers; ++i, it += 3)
-        for (int j = 0; j < height; ++j)
-            for (int k = 0; k < 3; ++k)
+    for (unsigned i = 1; i < layers; ++i, it += 3)
+        for (unsigned j = 0; j < height; ++j)
+            for (unsigned k = 0; k < 3; ++k)
                 memcpy(&data[((i * height + j) * 3 + k) * 4 * width], &images[*(it + k)][j * 4 * width], 4 * width);
 
     // free all images

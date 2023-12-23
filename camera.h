@@ -7,12 +7,12 @@
 struct Camera {
     Camera(float fovy, float aspect, float znear, float zfar)
         : fovy(fovy),
-          fovx(2 * glm::atan(glm::tan(fovy * 0.5) * aspect)),
+          fovx(2.0f * glm::atan(glm::tan(fovy * 0.5f) * aspect)),
           proj(glm::perspective(fovy, aspect, znear, zfar)) {
-        frustum.factor_y = 1.0 / std::cos(fovy * 0.5);
-        frustum.tan_y = std::tan(fovy * 0.5);
-        frustum.factor_x = 1.0 / std::cos(fovx * 0.5);
-        frustum.tan_x = std::tan(fovx * 0.5);
+        frustum.factor_y = 1.0f / std::cos(fovy * 0.5f);
+        frustum.tan_y = std::tan(fovy * 0.5f);
+        frustum.factor_x = 1.0f / std::cos(fovx * 0.5f);
+        frustum.tan_x = std::tan(fovx * 0.5f);
     }
 
     virtual void update() {
@@ -21,7 +21,7 @@ struct Camera {
     }
 
     void rotate_pitch(float delta_y) {
-        constexpr float PITCH_MAX = glm::radians(89.0);
+        constexpr float PITCH_MAX = glm::radians(89.0f);
 
         pitch -= delta_y;
         pitch = glm::clamp(pitch, -PITCH_MAX, PITCH_MAX);

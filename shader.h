@@ -82,7 +82,7 @@ struct Shader {
     vk::ShaderModule frag_shader = {};
     std::string shader_name;
     vk::CullModeFlags cull_mode = vk::CullModeFlagBits::eBack;
-    size_t draw_id = -1;
+    uint32_t draw_id = -1;
 
     Vulkan *vulkan;
     const Camera *camera;

@@ -22,7 +22,7 @@ struct Primitive {
     std::vector<vk::DeviceSize> vertexOffset;
     std::vector<uint32_t> vertexStrides;
     vk::PrimitiveTopology mode;
-    size_t drawId;
+    uint32_t drawId;
 };
 
 struct Mesh {
@@ -63,7 +63,7 @@ struct Model {
 
     void draw(const Primitive& primitive) {
         vulkan->drawIndex(primitive.drawId, primitive.index, primitive.indexOffset, primitive.indexType,
-                          primitive.indexCount, primitive.vertex, primitive.vertexOffset);
+                          (uint32_t)primitive.indexCount, primitive.vertex, primitive.vertexOffset);
     }
     void draw(const Mesh& mesh) {
         for (auto& primitive : mesh.primitives) draw(primitive);

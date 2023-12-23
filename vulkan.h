@@ -22,7 +22,7 @@ class Vulkan {
         void* data = nullptr;
 
         size_t size = 0;
-        size_t stride = 0;
+        uint32_t stride = 0;
         vk::ShaderStageFlags stage = vk::ShaderStageFlagBits::eVertex;
     };
 
@@ -51,19 +51,19 @@ class Vulkan {
 
     void init(vk::Extent2D extent, std::function<vk::SurfaceKHR(const vk::Instance&)> getSurfaceKHR,
               std::function<bool(const vk::PhysicalDevice&)> pickDevice = {});
-    size_t attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
+    uint32_t attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
                         const Buffer& vertex, const std::vector<vk::Format>& vertexFormats,
                         const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures,
                         vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack, bool autoDestroy = true);
-    size_t attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
+    uint32_t attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
                         const std::vector<uint32_t>& vertexStrides, const std::vector<vk::Format>& vertexFormats,
                         const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures,
                         vk::PrimitiveTopology primitiveTopology,
                         vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack, bool autoDestroy = true);
     unsigned int renderBegin();
-    void updateVertex(size_t i, const Buffer& vertex);
-    void draw(size_t i);
-    void drawIndex(size_t i, const vk::Buffer& index, vk::DeviceSize indexOffset, vk::IndexType indexType,
+    void updateVertex(uint32_t i, const Buffer& vertex);
+    void draw(uint32_t i);
+    void drawIndex(uint32_t i, const vk::Buffer& index, vk::DeviceSize indexOffset, vk::IndexType indexType,
                    uint32_t count, const std::vector<vk::Buffer>& vertex,
                    const std::vector<vk::DeviceSize>& vertexOffset);
     void renderEnd(unsigned int currentBuffer);
@@ -73,7 +73,7 @@ class Vulkan {
     Buffer createUniformBuffer(vk::DeviceSize size);
     void destroyUniformBuffer(const Buffer& buffer);
 
-    Buffer createVertexBuffer(const void* vertices, size_t stride, size_t size);
+    Buffer createVertexBuffer(const void* vertices, uint32_t stride, size_t size);
     void destroyVertexBuffer(const Buffer& buffer);
 
     Buffer createGltfBuffer(const void* data, size_t size);
@@ -99,13 +99,13 @@ class Vulkan {
     void initRenderPass();
     void initFrameBuffers();
     void initDescriptorSet(const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures);
-    size_t initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
+    uint32_t initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
                         uint32_t vertexStride, const std::vector<vk::Format>& vertexFormats, vk::CullModeFlags cullMode,
                         bool depthBuffered = true);
-    size_t initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
+    uint32_t initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
                         const std::vector<uint32_t>& vertexStrides, const std::vector<vk::Format>& vertexFormats,
                         vk::CullModeFlags cullMode, vk::PrimitiveTopology primitiveTopology, bool depthBuffered = true);
-    size_t initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
+    uint32_t initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
                         const vk::PipelineVertexInputStateCreateInfo& vertexInfo, vk::CullModeFlags cullMode,
                         vk::PrimitiveTopology primitiveTopology, bool depthBuffered,
                         const vk::PushConstantRange& pushConstant = {});

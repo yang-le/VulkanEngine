@@ -47,7 +47,7 @@ void Engine::init() {
                     glfwSetKeyCallback(window, nullptr);
                     glfwSetCursorPosCallback(window, [](GLFWwindow*, double xpos, double ypos) {
                         ImGuiIO& io = ImGui::GetIO();
-                        io.AddMousePosEvent(xpos, ypos);
+                        io.AddMousePosEvent((float)xpos, (float)ypos);
                     });
                 } else if (key == GLFW_KEY_F1 && action == GLFW_PRESS) {
                     self->imgui_show = !self->imgui_show;
@@ -61,8 +61,8 @@ void Engine::init() {
             glfwSetCursorPosCallback(window, [](GLFWwindow* window, double xpos, double ypos) {
                 Engine* self = (Engine*)glfwGetWindowUserPointer(window);
 
-                auto prev_x = std::exchange(self->mouse_x, xpos);
-                auto prev_y = std::exchange(self->mouse_y, ypos);
+                auto prev_x = std::exchange(self->mouse_x, (float)xpos);
+                auto prev_y = std::exchange(self->mouse_y, (float)ypos);
 
                 self->mouse_dx += self->mouse_x - prev_x;
                 self->mouse_dy += self->mouse_y - prev_y;

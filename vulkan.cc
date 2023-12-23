@@ -161,14 +161,14 @@ void Vulkan::init(vk::Extent2D extent, std::function<vk::SurfaceKHR(const vk::In
     frame.init(device, commandPool);
 };
 
-size_t Vulkan::attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
+uint32_t Vulkan::attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
                             const Buffer& vertex, const std::vector<vk::Format>& vertexFormats,
                             const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures,
                             vk::CullModeFlags cullMode, bool autoDestroy) {
     vertexBuffers.push_back(vertex);
 
     initDescriptorSet(uniforms, textures);
-    size_t drawId = initPipeline(vertexShaderModule, fragmentShaderModule, vertex.stride, vertexFormats, cullMode);
+    uint32_t drawId = initPipeline(vertexShaderModule, fragmentShaderModule, vertex.stride, vertexFormats, cullMode);
 
     if (autoDestroy) {
         destroyShaderModule(fragmentShaderModule);
@@ -178,12 +178,12 @@ size_t Vulkan::attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModul
     return drawId;
 }
 
-size_t Vulkan::attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
+uint32_t Vulkan::attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
                             const std::vector<uint32_t>& vertexStrides, const std::vector<vk::Format>& vertexFormats,
                             const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures,
                             vk::PrimitiveTopology primitiveTopology, vk::CullModeFlags cullMode, bool autoDestroy) {
     initDescriptorSet(uniforms, textures);
-    size_t drawId = initPipeline(vertexShaderModule, fragmentShaderModule, vertexStrides, vertexFormats, cullMode,
+    uint32_t drawId = initPipeline(vertexShaderModule, fragmentShaderModule, vertexStrides, vertexFormats, cullMode,
                                  primitiveTopology);
 
     if (autoDestroy) {
@@ -217,23 +217,23 @@ unsigned int Vulkan::renderBegin() {
 
     frame.commandBuffer().begin(vk::CommandBufferBeginInfo());
     frame.commandBuffer().beginRenderPass(renderPassBeginInfo, vk::SubpassContents::eInline);
-    frame.commandBuffer().setViewport(0, vk::Viewport(0, 0, imageExtent.width, imageExtent.height, 0, 1));
+    frame.commandBuffer().setViewport(0, vk::Viewport(0, 0, (float)imageExtent.width, (float)imageExtent.height, 0, 1));
     frame.commandBuffer().setScissor(0, vk::Rect2D({0, 0}, imageExtent));
 
     return currentBuffer.value;
 }
 
-void Vulkan::updateVertex(size_t i, const Buffer& vertex) { vertexBuffers[i] = vertex; }
+void Vulkan::updateVertex(uint32_t i, const Buffer& vertex) { vertexBuffers[i] = vertex; }
 
-void Vulkan::draw(size_t i) {
+void Vulkan::draw(uint32_t i) {
     frame.commandBuffer().bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipelines[i]);
     frame.commandBuffer().bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayouts[i], 0, descriptorSets[i],
                                              nullptr);
     frame.commandBuffer().bindVertexBuffers(0, vertexBuffers[i].buffer, {0});
-    frame.commandBuffer().draw(vertexBuffers[i].size / vertexBuffers[i].stride, 1, 0, 0);
+    frame.commandBuffer().draw((uint32_t)vertexBuffers[i].size / vertexBuffers[i].stride, 1, 0, 0);
 }
 
-void Vulkan::drawIndex(size_t i, const vk::Buffer& index, vk::DeviceSize indexOffset, vk::IndexType indexType,
+void Vulkan::drawIndex(uint32_t i, const vk::Buffer& index, vk::DeviceSize indexOffset, vk::IndexType indexType,
                        uint32_t count, const std::vector<vk::Buffer>& vertex,
                        const std::vector<vk::DeviceSize>& vertexOffset) {
     frame.commandBuffer().bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipelines[i]);
@@ -266,7 +266,7 @@ void Vulkan::renderEnd(unsigned int currentBuffer) {
 
 void Vulkan::render() {
     auto currentBuffer = renderBegin();
-    for (size_t i = 0; i < graphicsPipelines.size(); ++i) draw(i);
+    for (unsigned i = 0; i < graphicsPipelines.size(); ++i) draw(i);
     renderEnd(currentBuffer);
 }
 
@@ -284,7 +284,8 @@ Vulkan::Buffer Vulkan::createUniformBuffer(vk::DeviceSize size) {
         createBuffer(size, vk::BufferUsageFlagBits::eUniformBuffer,
                      vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 
-    buffer.stride = buffer.size = size;
+    buffer.stride = 0;
+    buffer.size = size;
     vmaMapMemory(vmaAllocator, buffer.memory, &buffer.data);
 
     return buffer;
@@ -297,7 +298,7 @@ void Vulkan::destroyUniformBuffer(const Buffer& buffer) {
     }
 }
 
-Vulkan::Buffer Vulkan::createVertexBuffer(const void* vertices, size_t stride, size_t size) {
+Vulkan::Buffer Vulkan::createVertexBuffer(const void* vertices, uint32_t stride, size_t size) {
     Buffer buffer;
     buffer.stride = stride;
     buffer.size = stride * size;
@@ -345,7 +346,7 @@ Vulkan::Texture Vulkan::createTexture(vk::Extent2D extent, const void* data, uin
 
     vk::Format format = vk::Format::eR8G8B8A8Unorm;
     vk::FormatProperties formatProps = physicalDevice.getFormatProperties(format);
-    uint32_t mipLevels = std::floor(std::log2(std::max(extent.width, extent.height))) + 1;
+    uint32_t mipLevels = (uint32_t)std::log2(std::max(extent.width, extent.height)) + 1;
 
     bool needStaging = !(formatProps.linearTilingFeatures & vk::FormatFeatureFlagBits::eSampledImage) || (layers > 1);
     if (needStaging) {
@@ -411,7 +412,7 @@ Vulkan::Texture Vulkan::createTexture(vk::Extent2D extent, const void* data, uin
 
     vk::SamplerCreateInfo samplerCreateInfo({}, mag, min, vk::SamplerMipmapMode::eLinear, modeU, modeV, modeW, 0.0f,
                                             anisotropy, physicalDevice.getProperties().limits.maxSamplerAnisotropy,
-                                            false, vk::CompareOp::eNever, 0.0f, mipLevels,
+                                            false, vk::CompareOp::eNever, 0.0f, (float)mipLevels,
                                             vk::BorderColor::eFloatOpaqueBlack);
     texture.sampler = device.createSampler(samplerCreateInfo);
 
@@ -476,7 +477,7 @@ void Vulkan::initDevice(std::function<vk::SurfaceKHR(const vk::Instance&)> getSu
                            [](const vk::QueueFamilyProperties& qfp) {
                                return qfp.queueFlags & (vk::QueueFlagBits::eCompute | vk::QueueFlagBits::eGraphics);
                            });
-    graphicsQueueFamliyIndex = std::distance(queueFamilyProperties.begin(), it);
+    graphicsQueueFamliyIndex = (uint32_t)std::distance(queueFamilyProperties.begin(), it);
     if (graphicsQueueFamliyIndex >= queueFamilyProperties.size())
         throw std::runtime_error("Cannot get graphics and compute queue!");
 
@@ -692,7 +693,7 @@ void Vulkan::initFrameBuffers() {
     }
 }
 
-size_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
+uint32_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
                             uint32_t vertexStride, const std::vector<vk::Format>& vertexFormats,
                             vk::CullModeFlags cullMode, bool depthBuffered) {
     vk::VertexInputBindingDescription vertexInputBindingDescription(0, vertexStride);
@@ -711,7 +712,7 @@ size_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const vk
                         vk::PrimitiveTopology::eTriangleList, depthBuffered);
 }
 
-size_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
+uint32_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
                             const std::vector<uint32_t>& vertexStrides, const std::vector<vk::Format>& vertexFormats,
                             vk::CullModeFlags cullMode, vk::PrimitiveTopology primitiveTopology, bool depthBuffered) {
     std::vector<vk::VertexInputBindingDescription> vertexInputBindingDescriptions;
@@ -729,7 +730,7 @@ size_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const vk
                         primitiveTopology, depthBuffered, {vk::ShaderStageFlagBits::eAll, 0, 4});
 }
 
-size_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
+uint32_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
                             const vk::PipelineVertexInputStateCreateInfo& vertexInfo, vk::CullModeFlags cullMode,
                             vk::PrimitiveTopology primitiveTopology, bool depthBuffered,
                             const vk::PushConstantRange& pushConstant) {
@@ -739,7 +740,7 @@ size_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const vk
 
     vk::PipelineInputAssemblyStateCreateInfo pipelineInputAssemblyStateCreateInfo({}, primitiveTopology);
 
-    vk::Viewport viewport(0, 0, imageExtent.width, imageExtent.height, 0, 1);
+    vk::Viewport viewport(0, 0, (float)imageExtent.width, (float)imageExtent.height, 0, 1);
     vk::Rect2D scissor({0, 0}, imageExtent);
     vk::PipelineViewportStateCreateInfo pipelineViewportStateCreateInfo({}, viewport, scissor);
 
@@ -780,7 +781,7 @@ size_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const vk
     assert(result == vk::Result::eSuccess);
 
     graphicsPipelines.push_back(pipeline);
-    return graphicsPipelines.size() - 1;
+    return (uint32_t)graphicsPipelines.size() - 1;
 }
 
 void Vulkan::destroySwapChain() {

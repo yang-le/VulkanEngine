@@ -50,16 +50,18 @@ class Vulkan {
     Vulkan& setDeviceFeatures(const vk::PhysicalDeviceFeatures& features);
 
     void init(vk::Extent2D extent, std::function<vk::SurfaceKHR(const vk::Instance&)> getSurfaceKHR,
-              std::function<bool(const vk::PhysicalDevice&)> pickDevice = {});
+              const vk::RenderPass& renderPass = {}, std::function<bool(const vk::PhysicalDevice&)> pickDevice = {});
     uint32_t attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
                           const Buffer& vertex, const std::vector<vk::Format>& vertexFormats,
                           const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures,
-                          vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack, bool autoDestroy = true);
+                          vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack, uint32_t subpass = 0,
+                          bool autoDestroy = true);
     uint32_t attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
                           const std::vector<uint32_t>& vertexStrides, const std::vector<vk::Format>& vertexFormats,
                           const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures,
                           vk::PrimitiveTopology primitiveTopology,
-                          vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack, bool autoDestroy = true);
+                          vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack, uint32_t subpass = 0,
+                          bool autoDestroy = true);
     unsigned int renderBegin();
     void updateVertex(uint32_t i, const Buffer& vertex);
     void draw(uint32_t i);
@@ -101,15 +103,15 @@ class Vulkan {
     void initDescriptorSet(const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures);
     uint32_t initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
                           uint32_t vertexStride, const std::vector<vk::Format>& vertexFormats,
-                          vk::CullModeFlags cullMode, bool depthBuffered = true);
+                          vk::CullModeFlags cullMode, uint32_t subpass, bool depthBuffered = true);
     uint32_t initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
                           const std::vector<uint32_t>& vertexStrides, const std::vector<vk::Format>& vertexFormats,
-                          vk::CullModeFlags cullMode, vk::PrimitiveTopology primitiveTopology,
+                          vk::PrimitiveTopology primitiveTopology, vk::CullModeFlags cullMode, uint32_t subpass,
                           bool depthBuffered = true);
     uint32_t initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
-                          const vk::PipelineVertexInputStateCreateInfo& vertexInfo, vk::CullModeFlags cullMode,
-                          vk::PrimitiveTopology primitiveTopology, bool depthBuffered,
-                          const vk::PushConstantRange& pushConstant = {});
+                          const vk::PipelineVertexInputStateCreateInfo& vertexInfo,
+                          vk::PrimitiveTopology primitiveTopology, vk::CullModeFlags cullMode, uint32_t subpass,
+                          bool depthBuffered, const vk::PushConstantRange& pushConstant = {});
     void destroySwapChain();
 
     //
@@ -220,4 +222,21 @@ class Vulkan {
         void next() { current = (current + 1) % FRAME_IN_FLIGHT; }
     };
     FrameInFlight frame;
+
+    struct RenderPassBuilder {
+        RenderPassBuilder& addSubpass(const std::initializer_list<uint32_t>& colors,
+                                      const std::initializer_list<uint32_t>& inputs = {});
+        RenderPassBuilder& dependOn(uint32_t subpass);
+        vk::RenderPass build(const vk::Device& device);
+
+        vk::AttachmentReference depthReference;
+        std::vector<vk::AttachmentDescription> attachmentDescriptions;
+        std::vector<vk::SubpassDescription> subpassDescriptions;
+        std::vector<vk::SubpassDependency> dependencies;
+
+        std::vector<std::vector<vk::AttachmentReference>> attachmentReferences;
+    };
+
+    RenderPassBuilder renderPassBuilder(const vk::ArrayProxy<vk::Format>& formats);
+    RenderPassBuilder renderPassBuilder(const vk::ArrayProxy<vk::AttachmentDescription>& attachments = {});
 };

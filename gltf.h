@@ -82,7 +82,7 @@ struct Model {
                       const std::map<int, Vulkan::Texture>& textures,
                       vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack) {
         primitive.drawId = vulkan->attachShader(vertexShaderModule, fragmentShaderModule, primitive.vertexStrides,
-                                                vertexFormats, uniforms, textures, primitive.mode, cullMode, false);
+                                                vertexFormats, uniforms, textures, primitive.mode, cullMode, 0, false);
     }
 
     void attachShader(Mesh& mesh, vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,

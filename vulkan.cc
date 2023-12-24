@@ -151,14 +151,14 @@ Vulkan& Vulkan::setDeviceFeatures(const vk::PhysicalDeviceFeatures& features) {
 }
 
 void Vulkan::init(vk::Extent2D extent, std::function<vk::SurfaceKHR(const vk::Instance&)> getSurfaceKHR,
-                  std::function<bool(const vk::PhysicalDevice&)> pickDevice) {
+                  const vk::RenderPass& renderPass, std::function<bool(const vk::PhysicalDevice&)> pickDevice) {
     initInstance();
     enumerateDevice(pickDevice);
     initDevice(getSurfaceKHR);
     initSwapChain(extent);
     initCommandBuffer();
     initDepthBuffer();
-    initRenderPass();
+    this->renderPass = renderPass ? renderPass : renderPassBuilder().build(device);
     initFrameBuffers();
     frame.init(device, commandPool);
 };
@@ -166,12 +166,13 @@ void Vulkan::init(vk::Extent2D extent, std::function<vk::SurfaceKHR(const vk::In
 uint32_t Vulkan::attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
                               const Buffer& vertex, const std::vector<vk::Format>& vertexFormats,
                               const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures,
-                              vk::CullModeFlags cullMode, bool autoDestroy) {
+                              vk::CullModeFlags cullMode, uint32_t subpass, bool autoDestroy) {
     drawResources.push_back({});
     vertexBuffer() = vertex;
 
     if (uniforms.size() || textures.size()) initDescriptorSet(uniforms, textures);
-    uint32_t drawId = initPipeline(vertexShaderModule, fragmentShaderModule, vertex.stride, vertexFormats, cullMode);
+    uint32_t drawId =
+        initPipeline(vertexShaderModule, fragmentShaderModule, vertex.stride, vertexFormats, cullMode, subpass);
 
     if (autoDestroy) {
         destroyShaderModule(fragmentShaderModule);
@@ -184,12 +185,13 @@ uint32_t Vulkan::attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderMod
 uint32_t Vulkan::attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
                               const std::vector<uint32_t>& vertexStrides, const std::vector<vk::Format>& vertexFormats,
                               const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures,
-                              vk::PrimitiveTopology primitiveTopology, vk::CullModeFlags cullMode, bool autoDestroy) {
+                              vk::PrimitiveTopology primitiveTopology, vk::CullModeFlags cullMode, uint32_t subpass,
+                              bool autoDestroy) {
     drawResources.push_back({});
 
     if (uniforms.size() || textures.size()) initDescriptorSet(uniforms, textures);
-    uint32_t drawId = initPipeline(vertexShaderModule, fragmentShaderModule, vertexStrides, vertexFormats, cullMode,
-                                   primitiveTopology);
+    uint32_t drawId = initPipeline(vertexShaderModule, fragmentShaderModule, vertexStrides, vertexFormats,
+                                   primitiveTopology, cullMode, subpass);
 
     if (autoDestroy) {
         destroyShaderModule(fragmentShaderModule);
@@ -673,26 +675,6 @@ void Vulkan::initDescriptorSet(const std::map<int, Buffer>& uniforms, const std:
     device.updateDescriptorSets(writeDescriptorSet, nullptr);
 }
 
-void Vulkan::initRenderPass() {
-    vk::Format colorFormat = pickSurfaceFormat(physicalDevice.getSurfaceFormatsKHR(surface)).format;
-
-    std::array<vk::AttachmentDescription, 2> attachmentDescriptions;
-    attachmentDescriptions[0] = vk::AttachmentDescription(
-        {}, colorFormat, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore,
-        vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare, vk::ImageLayout::eUndefined,
-        vk::ImageLayout::ePresentSrcKHR);
-    attachmentDescriptions[1] = vk::AttachmentDescription(
-        {}, vk::Format::eD16Unorm, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eClear,
-        vk::AttachmentStoreOp::eDontCare, vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
-        vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthStencilAttachmentOptimal);
-
-    vk::AttachmentReference colorReference(0, vk::ImageLayout::eColorAttachmentOptimal);
-    vk::AttachmentReference depthReference(1, vk::ImageLayout::eDepthStencilAttachmentOptimal);
-    vk::SubpassDescription subpass({}, vk::PipelineBindPoint::eGraphics, {}, colorReference, {}, &depthReference);
-
-    renderPass = device.createRenderPass({{}, attachmentDescriptions, subpass});
-}
-
 void Vulkan::initFrameBuffers() {
     std::array<vk::ImageView, 2> attachments;
     attachments[1] = depthImageView;
@@ -709,7 +691,7 @@ void Vulkan::initFrameBuffers() {
 
 uint32_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
                               uint32_t vertexStride, const std::vector<vk::Format>& vertexFormats,
-                              vk::CullModeFlags cullMode, bool depthBuffered) {
+                              vk::CullModeFlags cullMode, uint32_t subpass, bool depthBuffered) {
     vk::VertexInputBindingDescription vertexInputBindingDescription(0, vertexStride);
 
     std::vector<vk::VertexInputAttributeDescription> vertexInputAtrributeDescriptions;
@@ -722,13 +704,14 @@ uint32_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const 
     }
 
     return initPipeline(vertexShaderModule, fragmentShaderModule,
-                        {{}, vertexInputBindingDescription, vertexInputAtrributeDescriptions}, cullMode,
-                        vk::PrimitiveTopology::eTriangleList, depthBuffered);
+                        {{}, vertexInputBindingDescription, vertexInputAtrributeDescriptions},
+                        vk::PrimitiveTopology::eTriangleList, cullMode, subpass, depthBuffered);
 }
 
 uint32_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
                               const std::vector<uint32_t>& vertexStrides, const std::vector<vk::Format>& vertexFormats,
-                              vk::CullModeFlags cullMode, vk::PrimitiveTopology primitiveTopology, bool depthBuffered) {
+                              vk::PrimitiveTopology primitiveTopology, vk::CullModeFlags cullMode, uint32_t subpass,
+                              bool depthBuffered) {
     std::vector<vk::VertexInputBindingDescription> vertexInputBindingDescriptions;
     vertexInputBindingDescriptions.reserve(vertexStrides.size());
     for (int i = 0; i < vertexStrides.size(); ++i) vertexInputBindingDescriptions.emplace_back(i, vertexStrides[i]);
@@ -740,14 +723,14 @@ uint32_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const 
 
     assert(4 <= physicalDevice.getProperties().limits.maxPushConstantsSize);
     return initPipeline(vertexShaderModule, fragmentShaderModule,
-                        {{}, vertexInputBindingDescriptions, vertexInputAtrributeDescriptions}, cullMode,
-                        primitiveTopology, depthBuffered, {vk::ShaderStageFlagBits::eAll, 0, 4});
+                        {{}, vertexInputBindingDescriptions, vertexInputAtrributeDescriptions}, primitiveTopology,
+                        cullMode, subpass, depthBuffered, {vk::ShaderStageFlagBits::eAll, 0, 4});
 }
 
 uint32_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
-                              const vk::PipelineVertexInputStateCreateInfo& vertexInfo, vk::CullModeFlags cullMode,
-                              vk::PrimitiveTopology primitiveTopology, bool depthBuffered,
-                              const vk::PushConstantRange& pushConstant) {
+                              const vk::PipelineVertexInputStateCreateInfo& vertexInfo,
+                              vk::PrimitiveTopology primitiveTopology, vk::CullModeFlags cullMode, uint32_t subpass,
+                              bool depthBuffered, const vk::PushConstantRange& pushConstant) {
     std::array<vk::PipelineShaderStageCreateInfo, 2> pipelineShaderStageCreateInfos = {
         vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eVertex, vertexShaderModule, "main"),
         vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eFragment, fragmentShaderModule, "main")};
@@ -783,7 +766,7 @@ uint32_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const 
         {}, pipelineShaderStageCreateInfos, &vertexInfo, &pipelineInputAssemblyStateCreateInfo, nullptr,
         &pipelineViewportStateCreateInfo, &pipelineRasterizationStateCreateInfo, &pipelineMultisampleStateCreateInfo,
         &pipelineDepthStencilStateCreateInfo, &pipelineColorBlendStateCreateInfo, &pipelineDynamicStateCreateInfo,
-        pipelineLayout(), renderPass);
+        pipelineLayout(), renderPass, subpass);
 
     vk::Result result;
     std::tie(result, graphicsPipeline()) = device.createGraphicsPipeline(nullptr, graphicPipelineCreateInfo);
@@ -984,4 +967,94 @@ void Vulkan::setImageLayout(const vk::CommandBuffer& commandBuffer, vk::Image im
                                               vk::QueueFamilyIgnored, vk::QueueFamilyIgnored, image,
                                               {aspectMask, mipLevel, mipCount, 0, layerCount});
     commandBuffer.pipelineBarrier(sourceStage, destinationStage, {}, nullptr, nullptr, imageMemoryBarrier);
+}
+
+Vulkan::RenderPassBuilder& Vulkan::RenderPassBuilder::addSubpass(const std::initializer_list<uint32_t>& colors,
+                                                                 const std::initializer_list<uint32_t>& inputs) {
+    attachmentReferences.emplace_back();
+    attachmentReferences.emplace_back();
+
+    auto& colorReferences = attachmentReferences[attachmentReferences.size() - 1];
+    colorReferences.reserve(colors.size());
+    for (auto color : colors) colorReferences.emplace_back(color, vk::ImageLayout::eColorAttachmentOptimal);
+
+    auto& inputReferences = attachmentReferences[attachmentReferences.size() - 2];
+    if (inputs.size()) inputReferences.reserve(inputs.size());
+    for (auto input : inputs) inputReferences.emplace_back(input, vk::ImageLayout::eShaderReadOnlyOptimal);
+
+    subpassDescriptions.emplace_back(vk::SubpassDescriptionFlags{}, vk::PipelineBindPoint::eGraphics, inputReferences,
+                                     colorReferences, vk::ArrayProxyNoTemporaries<const vk::AttachmentReference>{},
+                                     &depthReference);
+
+    return *this;
+}
+
+Vulkan::RenderPassBuilder& Vulkan::RenderPassBuilder::dependOn(uint32_t subpass) {
+    dependencies.emplace_back(subpassDescriptions.size() - 1, subpass,
+                              vk::PipelineStageFlagBits::eColorAttachmentOutput,
+                              vk::PipelineStageFlagBits::eFragmentShader, vk::AccessFlagBits::eColorAttachmentWrite,
+                              vk::AccessFlagBits::eInputAttachmentRead, vk::DependencyFlagBits::eByRegion);
+    return *this;
+}
+
+vk::RenderPass Vulkan::RenderPassBuilder::build(const vk::Device& device) {
+    if (!subpassDescriptions.size()) {
+        vk::AttachmentReference colorReference(0, vk::ImageLayout::eColorAttachmentOptimal);
+        vk::SubpassDescription subpass({}, vk::PipelineBindPoint::eGraphics, {}, colorReference, {}, &depthReference);
+        return device.createRenderPass({{}, attachmentDescriptions, subpass});
+    }
+
+    // This makes sure that writes to the depth image are done before we try to write to it again
+    dependencies.emplace_back(
+        vk::SubpassExternal, 0,
+        vk::PipelineStageFlagBits::eEarlyFragmentTests | vk::PipelineStageFlagBits::eLateFragmentTests,
+        vk::PipelineStageFlagBits::eEarlyFragmentTests | vk::PipelineStageFlagBits::eLateFragmentTests,
+        vk::AccessFlagBits::eNone, vk::AccessFlagBits::eDepthStencilAttachmentWrite);
+
+    dependencies.emplace_back(vk::SubpassExternal, 0, vk::PipelineStageFlagBits::eColorAttachmentOutput,
+                              vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::AccessFlagBits::eNone,
+                              vk::AccessFlagBits::eColorAttachmentWrite);
+
+    dependencies.emplace_back(subpassDescriptions.size() - 1, vk::SubpassExternal,
+                              vk::PipelineStageFlagBits::eColorAttachmentOutput,
+                              vk::PipelineStageFlagBits::eBottomOfPipe,
+                              vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite,
+                              vk::AccessFlagBits::eMemoryRead, vk::DependencyFlagBits::eByRegion);
+    return device.createRenderPass({{}, attachmentDescriptions, subpassDescriptions, dependencies});
+}
+
+Vulkan::RenderPassBuilder Vulkan::renderPassBuilder(const vk::ArrayProxy<vk::Format>& formats) {
+    std::vector<vk::AttachmentDescription> attachments;
+    attachments.reserve(formats.size());
+    for (auto& format : formats)
+        attachments.emplace_back(vk::AttachmentDescriptionFlags{}, format, vk::SampleCountFlagBits::e1,
+                                 vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eDontCare,
+                                 vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
+                                 vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal);
+    return renderPassBuilder(attachments);
+}
+
+Vulkan::RenderPassBuilder Vulkan::renderPassBuilder(const vk::ArrayProxy<vk::AttachmentDescription>& attachments) {
+    RenderPassBuilder builder;
+
+    // The first attachment is always the framebuffer image
+    // and the last attachment is always the depth image
+
+    vk::Format colorFormat = pickSurfaceFormat(physicalDevice.getSurfaceFormatsKHR(surface)).format;
+    builder.attachmentDescriptions.emplace_back(
+        vk::AttachmentDescriptionFlags{}, colorFormat, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eClear,
+        vk::AttachmentStoreOp::eStore, vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
+        vk::ImageLayout::eUndefined, vk::ImageLayout::ePresentSrcKHR);
+
+    for (auto& attachment : attachments) builder.attachmentDescriptions.push_back(attachment);
+
+    builder.attachmentDescriptions.emplace_back(
+        vk::AttachmentDescriptionFlags{}, vk::Format::eD16Unorm, vk::SampleCountFlagBits::e1,
+        vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eDontCare, vk::AttachmentLoadOp::eDontCare,
+        vk::AttachmentStoreOp::eDontCare, vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthStencilAttachmentOptimal);
+
+    builder.depthReference = {static_cast<uint32_t>(builder.attachmentDescriptions.size() - 1),
+                              vk::ImageLayout::eDepthStencilAttachmentOptimal};
+
+    return builder;
 }

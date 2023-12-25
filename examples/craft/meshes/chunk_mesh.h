@@ -10,7 +10,7 @@ struct ChunkMesh : Shader {
     virtual ~ChunkMesh() override;
 
     virtual void init() override;
-    virtual void attach() override;
+    virtual void attach(uint32_t subpass = 0) override;
 
     using Vertex = uint32_t;
     using Voxels = std::array<uint8_t, CHUNK_VOL>;

@@ -5,8 +5,8 @@
 class Engine;
 class Player : public Camera {
    public:
-    Player(const Engine& engine, float speed = 1, float mouse_sensitivity = 0.002, float fovy = glm::radians(50.0),
-           float aspect = 1, float znear = 0.1, float zfar = 2000)
+    Player(const Engine& engine, float fovy = glm::radians(50.0), float aspect = 1, float znear = 0.1,
+           float zfar = 2000, float speed = 50, float mouse_sensitivity = 0.002)
         : engine(engine), speed(speed), mouse_sensitivity(mouse_sensitivity), Camera(fovy, aspect, znear, zfar) {}
     virtual ~Player() = default;
 

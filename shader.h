@@ -44,7 +44,7 @@ struct Shader {
     }
 
     virtual void load();
-    virtual void attach();
+    virtual void attach(uint32_t subpass = 0);
 
     template <typename T>
     void write_uniform(int binding, const T &data, vk::ShaderStageFlags stage = {}) {
@@ -86,4 +86,32 @@ struct Shader {
 
     Vulkan *vulkan;
     const Camera *camera;
+};
+
+template <size_t N>
+struct SubpassShader : Shader {
+    SubpassShader(Engine &engine);
+
+    virtual void init() override {
+        for (auto &subpass : subpasses) subpasses.init();
+    }
+    virtual void update() override {
+        for (auto &subpass : subpasses) subpasses.update();
+    }
+    virtual void load() override {
+        for (auto &subpass : subpasses) subpasses.load();
+    }
+    void attach() {
+        for (unsigned i = 0; i < N; ++i) subpasses[i].attach(i);
+    }
+    virtual void draw() override {
+        unsigned i;
+        for (i = 0; i < N - 1; ++i) {
+            subpasses[i].draw();
+            vulkan->nextSubpass();
+        }
+        subpasses[i].draw();
+    }
+
+    std::array<std::unique_ptr<Shader>, N> subpasses;
 };

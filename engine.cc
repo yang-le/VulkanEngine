@@ -6,7 +6,7 @@
 
 #include <iostream>
 
-void Engine::init() {
+void Engine::init(const Vulkan::RenderPassBuilder& builder) {
     start_time = std::chrono::system_clock::now();
     glfwInit();
 
@@ -17,7 +17,7 @@ void Engine::init() {
     const char** extensions = glfwGetRequiredInstanceExtensions(&count);
     if (!extensions) throw std::runtime_error("GLFW cannot create Vulkan window surfaces!");
 
-    vulkan.setInstanceExtensions({count, extensions});
+    vulkan.setInstanceExtensions({count, extensions}).setRenderPassBuilder(builder);
     vulkan.init({width, height}, [this](const vk::Instance& instance) {
         VkSurfaceKHR surfaceKHR = VK_NULL_HANDLE;
         glfwCreateWindowSurface(instance, window, nullptr, &surfaceKHR);
@@ -63,6 +63,8 @@ void Engine::init() {
 
                 auto prev_x = std::exchange(self->mouse_x, (float)xpos);
                 auto prev_y = std::exchange(self->mouse_y, (float)ypos);
+
+                if (std::isinf(prev_x) || std::isinf(prev_y)) return;
 
                 self->mouse_dx += self->mouse_x - prev_x;
                 self->mouse_dy += self->mouse_y - prev_y;
@@ -180,6 +182,7 @@ void Engine::EngineGui::gui_draw() {
     // ImGui::Text("Chunk x: %d, y: %d, z: %d", (int)engine.player->position.x / CHUNK_SIZE,
     //             (int)engine.player->position.y / CHUNK_SIZE, (int)engine.player->position.z / CHUNK_SIZE);
     ImGui::Text("Player direction %d", (360 - (int)glm::degrees(engine.player->yaw) % 360) % 360);
+    ImGui::Text("Player pitch %d", (int)glm::degrees(engine.player->pitch));
     ImGui::Text("Player position x: %d, y: %d, z: %d", (int)engine.player->position.x, (int)engine.player->position.y,
                 (int)engine.player->position.z);
     // ImGui::Text("Voxel position x: %d, y: %d, z: %d", (int)engine.scene->world->voxel_handler->position.x,

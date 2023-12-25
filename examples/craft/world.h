@@ -10,7 +10,7 @@ struct World : Shader {
     virtual void init() override;
     virtual void update() override;
     virtual void load() override;
-    virtual void attach() override;
+    virtual void attach(uint32_t subpass = 0) override;
     virtual void draw() override;
 
     const Camera& camera;

@@ -21,7 +21,7 @@ class Engine {
         destroy();
     }
 
-    void init();
+    void init(const Vulkan::RenderPassBuilder& builder = {});
     void loop();
     void destroy();
 
@@ -68,7 +68,8 @@ class Engine {
     std::chrono::system_clock::time_point t;
     std::chrono::duration<float> dt;
 
-    float mouse_x = 0, mouse_y = 0;
+    float mouse_x = std::numeric_limits<float>().infinity();
+    float mouse_y = std::numeric_limits<float>().infinity();
 
     std::bitset<GLFW_KEY_LAST> key_state;
 

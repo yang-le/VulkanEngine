@@ -45,10 +45,10 @@ void World::load() {
     voxel_handler->load();
 }
 
-void World::attach() {
+void World::attach(uint32_t subpass) {
     for (auto& chunk : chunks)
-        if (!chunk->empty) chunk->attach();
-    voxel_handler->attach();
+        if (!chunk->empty) chunk->attach(subpass);
+    voxel_handler->attach(subpass);
 
     vulkan->destroyShaderModule(frag_shader);
     vulkan->destroyShaderModule(vert_shader);

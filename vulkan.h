@@ -37,6 +37,20 @@ class Vulkan {
         vk::ShaderStageFlags stage = vk::ShaderStageFlagBits::eFragment;
     };
 
+    struct RenderPassBuilder {
+        RenderPassBuilder& addSubpass(const std::initializer_list<uint32_t>& colors,
+                                      const std::initializer_list<uint32_t>& inputs = {});
+        RenderPassBuilder& dependOn(uint32_t subpass);
+        vk::RenderPass build(const vk::Device& device, const vk::Format& frameFormat);
+
+        vk::AttachmentReference depthReference;
+        std::vector<vk::AttachmentDescription> attachmentDescriptions;
+        std::vector<vk::SubpassDescription> subpassDescriptions;
+        std::vector<vk::SubpassDependency> dependencies;
+
+        std::vector<std::shared_ptr<std::vector<vk::AttachmentReference>>> attachmentReferences;
+    };
+
     Vulkan() = default;
     ~Vulkan();
 
@@ -48,26 +62,27 @@ class Vulkan {
     Vulkan& setDeviceLayers(const vk::ArrayProxyNoTemporaries<const char* const>& layers);
     Vulkan& setDeviceExtensions(const vk::ArrayProxyNoTemporaries<const char* const>& extensions);
     Vulkan& setDeviceFeatures(const vk::PhysicalDeviceFeatures& features);
+    Vulkan& setRenderPassBuilder(const RenderPassBuilder& builder);
 
     void init(vk::Extent2D extent, std::function<vk::SurfaceKHR(const vk::Instance&)> getSurfaceKHR,
-              const vk::RenderPass& renderPass = {}, std::function<bool(const vk::PhysicalDevice&)> pickDevice = {});
+              std::function<bool(const vk::PhysicalDevice&)> pickDevice = {});
     uint32_t attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
                           const Buffer& vertex, const std::vector<vk::Format>& vertexFormats,
                           const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures,
-                          vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack, uint32_t subpass = 0,
+                          uint32_t subpass, vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack,
                           bool autoDestroy = true);
     uint32_t attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
                           const std::vector<uint32_t>& vertexStrides, const std::vector<vk::Format>& vertexFormats,
                           const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures,
-                          vk::PrimitiveTopology primitiveTopology,
-                          vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack, uint32_t subpass = 0,
-                          bool autoDestroy = true);
+                          vk::PrimitiveTopology primitiveTopology, uint32_t subpass,
+                          vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack, bool autoDestroy = true);
     unsigned int renderBegin();
     void updateVertex(uint32_t i, const Buffer& vertex);
     void draw(uint32_t i);
     void drawIndex(uint32_t i, const vk::Buffer& index, vk::DeviceSize indexOffset, vk::IndexType indexType,
                    uint32_t count, const std::vector<vk::Buffer>& vertex,
                    const std::vector<vk::DeviceSize>& vertexOffset);
+    void nextSubpass();
     void renderEnd(unsigned int currentBuffer);
     void render();
     void resize(vk::Extent2D extent);
@@ -91,6 +106,9 @@ class Vulkan {
     vk::ShaderModule createShaderModule(vk::ShaderStageFlagBits shaderStage, const std::string& shaderText);
     void destroyShaderModule(const vk::ShaderModule& shader);
 
+    static RenderPassBuilder makeRenderPassBuilder(const vk::ArrayProxy<vk::Format>& formats);
+    static RenderPassBuilder makeRenderPassBuilder(const vk::ArrayProxy<vk::AttachmentDescription>& attachments = {});
+
    private:
     void initInstance();
     void enumerateDevice(std::function<bool(const vk::PhysicalDevice&)> pickDevice);
@@ -102,15 +120,15 @@ class Vulkan {
     void initFrameBuffers();
     void initDescriptorSet(const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures);
     uint32_t initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
-                          uint32_t vertexStride, const std::vector<vk::Format>& vertexFormats,
-                          vk::CullModeFlags cullMode, uint32_t subpass, bool depthBuffered = true);
+                          uint32_t vertexStride, const std::vector<vk::Format>& vertexFormats, uint32_t subpass,
+                          vk::CullModeFlags cullMode, bool depthBuffered = true);
     uint32_t initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
                           const std::vector<uint32_t>& vertexStrides, const std::vector<vk::Format>& vertexFormats,
-                          vk::PrimitiveTopology primitiveTopology, vk::CullModeFlags cullMode, uint32_t subpass,
+                          vk::PrimitiveTopology primitiveTopology, uint32_t subpass, vk::CullModeFlags cullMode,
                           bool depthBuffered = true);
     uint32_t initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
                           const vk::PipelineVertexInputStateCreateInfo& vertexInfo,
-                          vk::PrimitiveTopology primitiveTopology, vk::CullModeFlags cullMode, uint32_t subpass,
+                          vk::PrimitiveTopology primitiveTopology, uint32_t subpass, vk::CullModeFlags cullMode,
                           bool depthBuffered, const vk::PushConstantRange& pushConstant = {});
     void destroySwapChain();
 
@@ -157,6 +175,8 @@ class Vulkan {
     vk::RenderPass renderPass;
     vk::ClearColorValue bgColor;
     uint32_t imageCount;
+
+    RenderPassBuilder renderPassBuilder;
 
     struct DrawResource {
         Buffer vertexBuffer = {};
@@ -222,21 +242,4 @@ class Vulkan {
         void next() { current = (current + 1) % FRAME_IN_FLIGHT; }
     };
     FrameInFlight frame;
-
-    struct RenderPassBuilder {
-        RenderPassBuilder& addSubpass(const std::initializer_list<uint32_t>& colors,
-                                      const std::initializer_list<uint32_t>& inputs = {});
-        RenderPassBuilder& dependOn(uint32_t subpass);
-        vk::RenderPass build(const vk::Device& device);
-
-        vk::AttachmentReference depthReference;
-        std::vector<vk::AttachmentDescription> attachmentDescriptions;
-        std::vector<vk::SubpassDescription> subpassDescriptions;
-        std::vector<vk::SubpassDependency> dependencies;
-
-        std::vector<std::vector<vk::AttachmentReference>> attachmentReferences;
-    };
-
-    RenderPassBuilder renderPassBuilder(const vk::ArrayProxy<vk::Format>& formats);
-    RenderPassBuilder renderPassBuilder(const vk::ArrayProxy<vk::AttachmentDescription>& attachments = {});
 };

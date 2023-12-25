@@ -53,7 +53,7 @@ struct Camera {
         up = glm::normalize(glm::cross(right, forward));
     }
 
-    float yaw = 0;
+    float yaw = glm::radians(-90.0f);
     float pitch = 0;
     float fovy, fovx;
 

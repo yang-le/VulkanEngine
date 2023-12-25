@@ -205,9 +205,9 @@ void ChunkMesh::init() {
     write_uniform(2, model);
 }
 
-void ChunkMesh::attach() {
+void ChunkMesh::attach(uint32_t subpass) {
     draw_id = vulkan->attachShader(world->vert_shader, world->frag_shader, vertex, vert_formats, uniforms,
-                                   world->textures, cull_mode, 0, false);
+                                   world->textures, subpass, cull_mode, false);
 }
 
 std::unique_ptr<ChunkMesh::Voxels> ChunkMesh::build_voxels() {

@@ -79,39 +79,41 @@ struct Model {
 
     void attachShader(Primitive& primitive, vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
                       const std::vector<vk::Format>& vertexFormats, const std::map<int, Vulkan::Buffer>& uniforms,
-                      const std::map<int, Vulkan::Texture>& textures,
+                      const std::map<int, Vulkan::Texture>& textures, uint32_t subpass,
                       vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack) {
-        primitive.drawId = vulkan->attachShader(vertexShaderModule, fragmentShaderModule, primitive.vertexStrides,
-                                                vertexFormats, uniforms, textures, primitive.mode, cullMode, 0, false);
+        primitive.drawId =
+            vulkan->attachShader(vertexShaderModule, fragmentShaderModule, primitive.vertexStrides, vertexFormats,
+                                 uniforms, textures, primitive.mode, subpass, cullMode, false);
     }
 
     void attachShader(Mesh& mesh, vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
                       const std::vector<vk::Format>& vertexFormats, const std::map<int, Vulkan::Buffer>& uniforms,
-                      const std::map<int, Vulkan::Texture>& textures,
+                      const std::map<int, Vulkan::Texture>& textures, uint32_t subpass,
                       vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack) {
         for (auto& primitive : mesh.primitives)
             attachShader(primitive, vertexShaderModule, fragmentShaderModule, vertexFormats, uniforms, textures,
-                         cullMode);
+                         subpass, cullMode);
     }
 
     void attachShader(Node& node, vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
                       const std::vector<vk::Format>& vertexFormats, const std::map<int, Vulkan::Buffer>& uniforms,
-                      const std::map<int, Vulkan::Texture>& textures,
+                      const std::map<int, Vulkan::Texture>& textures, uint32_t subpass,
                       vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack) {
         if (node.mesh)
             attachShader(*node.mesh, vertexShaderModule, fragmentShaderModule, vertexFormats, uniforms, textures,
-                         cullMode);
+                         subpass, cullMode);
         for (auto& child : node.children)
-            attachShader(child, vertexShaderModule, fragmentShaderModule, vertexFormats, uniforms, textures, cullMode);
+            attachShader(child, vertexShaderModule, fragmentShaderModule, vertexFormats, uniforms, textures, subpass,
+                         cullMode);
     }
 
     void attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
                       const std::vector<vk::Format>& vertexFormats, const std::map<int, Vulkan::Buffer>& uniforms,
-                      const std::map<int, Vulkan::Texture>& textures, size_t i = -1,
+                      const std::map<int, Vulkan::Texture>& textures, uint32_t subpass, size_t i = -1,
                       vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack) {
         if (i == -1) i = model.defaultScene > -1 ? model.defaultScene : 0;
         for (auto j : model.scenes[i].nodes)
-            attachShader(nodes[j], vertexShaderModule, fragmentShaderModule, vertexFormats, uniforms, textures,
+            attachShader(nodes[j], vertexShaderModule, fragmentShaderModule, vertexFormats, uniforms, textures, subpass,
                          cullMode);
 
         vulkan->destroyShaderModule(fragmentShaderModule);
@@ -140,7 +142,9 @@ struct Shader : ::Shader {
         model.load();
     }
 
-    virtual void attach() override { model.attachShader(vert_shader, frag_shader, vert_formats, uniforms, textures); }
+    virtual void attach(uint32_t subpass = 0) override {
+        model.attachShader(vert_shader, frag_shader, vert_formats, uniforms, textures, subpass);
+    }
 
     virtual void draw() override { model.draw(); }
 

@@ -98,6 +98,7 @@ Vulkan::~Vulkan() {
         destroySwapChain();
         vmaDestroyAllocator(vmaAllocator);
 
+        renderPassBuilder.destroy(device);
         device.destroyRenderPass(renderPass);
         for (auto& drawResource : drawResources) {
             device.destroyPipeline(drawResource.graphicsPipeline);
@@ -151,7 +152,7 @@ Vulkan& Vulkan::setDeviceFeatures(const vk::PhysicalDeviceFeatures& features) {
 }
 
 Vulkan& Vulkan::setRenderPassBuilder(const RenderPassBuilder& builder) {
-    renderPassBuilder = std::move(builder);
+    renderPassBuilder = builder;
     return *this;
 }
 
@@ -162,7 +163,6 @@ void Vulkan::init(vk::Extent2D extent, std::function<vk::SurfaceKHR(const vk::In
     initDevice(getSurfaceKHR);
     initSwapChain(extent);
     initCommandBuffer();
-    initDepthBuffer();
 
     if (renderPassBuilder.attachmentDescriptions.empty()) renderPassBuilder = makeRenderPassBuilder();
     vk::Format surfaceFormat = pickSurfaceFormat(physicalDevice.getSurfaceFormatsKHR(surface)).format;
@@ -224,9 +224,9 @@ unsigned int Vulkan::renderBegin() {
 
     device.resetFences(frame.drawFence());
 
-    std::array<vk::ClearValue, 2> clearValues;
-    clearValues[0].color = bgColor;
-    clearValues[1].depthStencil = vk::ClearDepthStencilValue(1.0f, 0);
+    std::vector<vk::ClearValue> clearValues(renderPassBuilder.attachmentDescriptions.size(), vk::ClearColorValue{});
+    clearValues.front().color = bgColor;
+    clearValues.back().depthStencil = vk::ClearDepthStencilValue(1.0f, 0);
 
     vk::RenderPassBeginInfo renderPassBeginInfo(renderPass, framebuffers[currentBuffer.value],
                                                 vk::Rect2D(vk::Offset2D(0, 0), imageExtent), clearValues);
@@ -294,8 +294,11 @@ void Vulkan::resize(vk::Extent2D extent) {
     device.waitIdle();
     destroySwapChain();
     initSwapChain(extent);
-    initDepthBuffer();
     initFrameBuffers();
+    renderPassBuilder.buildImages(*this);
+
+    device.freeDescriptorSets(renderPassBuilder.descriptorPool, renderPassBuilder.descriptorSets);
+    renderPassBuilder.buildDescriptorSets(device, swapChainImages.size());
 }
 
 Vulkan::Buffer Vulkan::createUniformBuffer(vk::DeviceSize size) {
@@ -616,26 +619,6 @@ void Vulkan::initSwapChain(vk::Extent2D extent) {
     }
 }
 
-void Vulkan::initDepthBuffer() {
-    const vk::Format depthFormat = vk::Format::eD16Unorm;
-    vk::FormatProperties formatProp = physicalDevice.getFormatProperties(depthFormat);
-
-    vk::ImageTiling tiling;
-    if (formatProp.optimalTilingFeatures & vk::FormatFeatureFlagBits::eDepthStencilAttachment) {
-        tiling = vk::ImageTiling::eOptimal;
-    } else if (formatProp.linearTilingFeatures & vk::FormatFeatureFlagBits::eDepthStencilAttachment) {
-        tiling = vk::ImageTiling::eLinear;
-    } else {
-        throw std::runtime_error("DepthStencilAttachment is not supported for D16Unorm depth format.");
-    }
-
-    std::tie(depthImage, depthMemory) =
-        createImage(imageExtent, depthFormat, tiling,
-                    vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eTransientAttachment);
-    depthImageView = device.createImageView(
-        {{}, depthImage, vk::ImageViewType::e2D, depthFormat, {}, {vk::ImageAspectFlagBits::eDepth, 0, 1, 0, 1}});
-}
-
 void Vulkan::initDescriptorSet(const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures) {
     assert(uniforms.size() || textures.size());
 
@@ -687,15 +670,18 @@ void Vulkan::initDescriptorSet(const std::map<int, Buffer>& uniforms, const std:
 }
 
 void Vulkan::initFrameBuffers() {
-    std::array<vk::ImageView, 2> attachments;
-    attachments[1] = depthImageView;
+    renderPassBuilder.buildImages(*this);
+    renderPassBuilder.buildDescriptor(device, swapChainImages.size());
 
+    std::vector<vk::ImageView> attachments(renderPassBuilder.attachmentDescriptions.size());
     vk::FramebufferCreateInfo framebufferCreateInfo({}, renderPass, attachments, imageExtent.width, imageExtent.height,
                                                     1);
 
     framebuffers.reserve(swapChainImageViews.size());
-    for (auto const& imageView : swapChainImageViews) {
-        attachments[0] = imageView;
+    for (unsigned j = 0; j < swapChainImageViews.size(); ++j) {
+        attachments[0] = swapChainImageViews[j];
+        for (unsigned i = 1; i < renderPassBuilder.attachmentDescriptions.size(); ++i)
+            attachments[i] = renderPassBuilder.imageViews[j][i - 1];
         framebuffers.push_back(device.createFramebuffer(framebufferCreateInfo));
     }
 }
@@ -793,8 +779,7 @@ void Vulkan::destroySwapChain() {
     swapChainImageViews.clear();
     device.destroySwapchainKHR(swapChain);
 
-    device.destroyImageView(depthImageView);
-    vmaDestroyImage(vmaAllocator, depthImage, depthMemory);
+    renderPassBuilder.destroyImages(device, vmaAllocator);
 }
 
 //
@@ -1008,14 +993,131 @@ Vulkan::RenderPassBuilder& Vulkan::RenderPassBuilder::dependOn(uint32_t subpass)
     return *this;
 }
 
+void Vulkan::RenderPassBuilder::buildImages(Vulkan& vulkan) {
+    images.reserve(vulkan.swapChainImages.size());
+    imageViews.reserve(vulkan.swapChainImages.size());
+
+    for (unsigned j = 0; j < vulkan.swapChainImages.size(); ++j) {
+        images.push_back({});
+        imageViews.push_back({});
+
+        images.back().reserve(attachmentDescriptions.size() - 1);
+        imageViews.back().reserve(attachmentDescriptions.size() - 1);
+
+        unsigned i;
+        for (i = 1; i < attachmentDescriptions.size() - 1; ++i) {
+            vk::FormatProperties formatProp =
+                vulkan.physicalDevice.getFormatProperties(attachmentDescriptions[i].format);
+
+            vk::ImageTiling tiling;
+            if (formatProp.optimalTilingFeatures & vk::FormatFeatureFlagBits::eColorAttachment) {
+                tiling = vk::ImageTiling::eOptimal;
+            } else if (formatProp.linearTilingFeatures & vk::FormatFeatureFlagBits::eColorAttachment) {
+                tiling = vk::ImageTiling::eLinear;
+            } else {
+                throw std::runtime_error("ColorAttachment format not supported.");
+            }
+
+            auto image =
+                vulkan.createImage(vulkan.imageExtent, attachmentDescriptions[i].format, tiling,
+                                   vk::ImageUsageFlagBits::eInputAttachment | vk::ImageUsageFlagBits::eColorAttachment |
+                                       vk::ImageUsageFlagBits::eTransientAttachment);
+            vk::ImageView imageView = vulkan.device.createImageView({{},
+                                                                     image.first,
+                                                                     vk::ImageViewType::e2D,
+                                                                     attachmentDescriptions[i].format,
+                                                                     {},
+                                                                     {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}});
+            images.back().push_back(image);
+            imageViews.back().push_back(imageView);
+        }
+
+        vk::FormatProperties formatProp = vulkan.physicalDevice.getFormatProperties(attachmentDescriptions[i].format);
+
+        vk::ImageTiling tiling;
+        if (formatProp.optimalTilingFeatures & vk::FormatFeatureFlagBits::eDepthStencilAttachment) {
+            tiling = vk::ImageTiling::eOptimal;
+        } else if (formatProp.linearTilingFeatures & vk::FormatFeatureFlagBits::eDepthStencilAttachment) {
+            tiling = vk::ImageTiling::eLinear;
+        } else {
+            throw std::runtime_error("DepthAttachment format not supported.");
+        }
+
+        auto image = vulkan.createImage(vulkan.imageExtent, attachmentDescriptions[i].format, tiling,
+                                        vk::ImageUsageFlagBits::eInputAttachment |
+                                            vk::ImageUsageFlagBits::eDepthStencilAttachment |
+                                            vk::ImageUsageFlagBits::eTransientAttachment);
+        vk::ImageView imageView = vulkan.device.createImageView({{},
+                                                                 image.first,
+                                                                 vk::ImageViewType::e2D,
+                                                                 attachmentDescriptions[i].format,
+                                                                 {},
+                                                                 {vk::ImageAspectFlagBits::eDepth, 0, 1, 0, 1}});
+        images.back().push_back(image);
+        imageViews.back().push_back(imageView);
+    }
+}
+
+void Vulkan::RenderPassBuilder::buildDescriptor(const vk::Device& device, size_t swapChainImageCount) {
+    // we create input descriptor pool for every attachment except the framebuffer
+    uint32_t descriptorCount = swapChainImageCount * (attachmentDescriptions.size() - 1);
+    vk::DescriptorPoolSize poolSize{vk::DescriptorType::eInputAttachment, descriptorCount};
+
+    descriptorPool = device.createDescriptorPool(
+        {vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet, (uint32_t)swapChainImageCount, 1, &poolSize});
+
+    std::vector<vk::DescriptorSetLayoutBinding> descriptorSetLayoutBindings;
+    descriptorSetLayoutBindings.reserve(attachmentDescriptions.size() - 1);
+
+    for (unsigned i = 0; i < attachmentDescriptions.size() - 1; ++i)
+        descriptorSetLayoutBindings.emplace_back(i, vk::DescriptorType::eInputAttachment, 1,
+                                                 vk::ShaderStageFlagBits::eFragment);
+    descriptorSetLayout = device.createDescriptorSetLayout({{}, descriptorSetLayoutBindings});
+    buildDescriptorSets(device, swapChainImageCount);
+}
+
+void Vulkan::RenderPassBuilder::buildDescriptorSets(const vk::Device& device, size_t swapChainImageCount) {
+    uint32_t descriptorCount = swapChainImageCount * (attachmentDescriptions.size() - 1);
+    std::vector<vk::DescriptorSetLayout> setLayouts(swapChainImageCount, descriptorSetLayout);
+
+    vk::DescriptorSetAllocateInfo descriptorSetAllocateInfo(descriptorPool, setLayouts);
+    descriptorSets = device.allocateDescriptorSets(descriptorSetAllocateInfo);
+
+    std::vector<vk::DescriptorImageInfo> descriptorImageInfo;
+    descriptorImageInfo.reserve(descriptorCount);
+    std::vector<vk::WriteDescriptorSet> writeDescriptorSet;
+    writeDescriptorSet.reserve(descriptorCount);
+
+    for (unsigned j = 0; j < swapChainImageCount; ++j)
+        for (unsigned i = 0; i < attachmentDescriptions.size() - 1; ++i) {
+            descriptorImageInfo.emplace_back(nullptr, imageViews[j][i], vk::ImageLayout::eShaderReadOnlyOptimal);
+            writeDescriptorSet.emplace_back(descriptorSets[j], i, 0, 1, vk::DescriptorType::eInputAttachment,
+                                            &descriptorImageInfo.back());
+        }
+
+    device.updateDescriptorSets(writeDescriptorSet, nullptr);
+}
+
+void Vulkan::RenderPassBuilder::destroy(const vk::Device& device) {
+    device.freeDescriptorSets(descriptorPool, descriptorSets);
+    device.destroyDescriptorPool(descriptorPool);
+    device.destroyDescriptorSetLayout(descriptorSetLayout);
+}
+
+void Vulkan::RenderPassBuilder::destroyImages(const vk::Device& device, const VmaAllocator& vmaAllocator) {
+    for (auto& imageView : imageViews)
+        for (auto& view : imageView) device.destroyImageView(view);
+    imageViews.clear();
+
+    for (auto& image : images)
+        for (auto& img : image) vmaDestroyImage(vmaAllocator, img.first, img.second);
+    images.clear();
+}
+
 vk::RenderPass Vulkan::RenderPassBuilder::build(const vk::Device& device, const vk::Format& frameFormat) {
     attachmentDescriptions.front().setFormat(frameFormat);
 
-    if (!subpassDescriptions.size()) {
-        vk::AttachmentReference colorReference(0, vk::ImageLayout::eColorAttachmentOptimal);
-        vk::SubpassDescription subpass({}, vk::PipelineBindPoint::eGraphics, {}, colorReference, {}, &depthReference);
-        return device.createRenderPass({{}, attachmentDescriptions, subpass});
-    }
+    if (!subpassDescriptions.size()) addSubpass({0});
 
     // This makes sure that writes to the depth image are done before we try to write to it again
     dependencies.emplace_back(

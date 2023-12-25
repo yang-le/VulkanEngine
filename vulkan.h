@@ -41,12 +41,27 @@ class Vulkan {
         RenderPassBuilder& addSubpass(const std::initializer_list<uint32_t>& colors,
                                       const std::initializer_list<uint32_t>& inputs = {});
         RenderPassBuilder& dependOn(uint32_t subpass);
+
+        void buildImages(Vulkan& vulkan);
+        void buildDescriptor(const vk::Device& device, size_t swapChainImageCount);
+        void buildDescriptorSets(const vk::Device& device, size_t swapChainImageCount);
+
         vk::RenderPass build(const vk::Device& device, const vk::Format& frameFormat);
+
+        void destroy(const vk::Device& device);
+        void destroyImages(const vk::Device& device, const VmaAllocator& vmaAllocator);
 
         vk::AttachmentReference depthReference;
         std::vector<vk::AttachmentDescription> attachmentDescriptions;
         std::vector<vk::SubpassDescription> subpassDescriptions;
         std::vector<vk::SubpassDependency> dependencies;
+
+        std::vector<std::vector<std::pair<vk::Image, VmaAllocation>>> images;
+        std::vector<std::vector<vk::ImageView>> imageViews;
+
+        vk::DescriptorSetLayout descriptorSetLayout;
+        vk::DescriptorPool descriptorPool;
+        std::vector<vk::DescriptorSet> descriptorSets;
 
         std::vector<std::shared_ptr<std::vector<vk::AttachmentReference>>> attachmentReferences;
     };
@@ -115,7 +130,6 @@ class Vulkan {
     void initDevice(std::function<vk::SurfaceKHR(const vk::Instance&)> getSurfaceKHR);
     void initCommandBuffer();
     void initSwapChain(vk::Extent2D extent);
-    void initDepthBuffer();
     void initRenderPass();
     void initFrameBuffers();
     void initDescriptorSet(const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures);
@@ -168,9 +182,6 @@ class Vulkan {
     vk::SwapchainKHR swapChain;
     std::vector<vk::Image> swapChainImages;
     std::vector<vk::ImageView> swapChainImageViews;
-    vk::Image depthImage;
-    VmaAllocation depthMemory;
-    vk::ImageView depthImageView;
     std::vector<vk::Framebuffer> framebuffers;
     vk::RenderPass renderPass;
     vk::ClearColorValue bgColor;

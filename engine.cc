@@ -138,7 +138,7 @@ void Engine::render() {
     try {
         auto currentBuffer = vulkan.renderBegin();
 
-        scene->draw();
+        scene->draw(currentBuffer);
 
         if (imgui_show) {
             // Start the Dear ImGui frame

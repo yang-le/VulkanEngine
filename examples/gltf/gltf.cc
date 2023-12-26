@@ -3,7 +3,7 @@
 #include <iostream>
 
 struct Mesh : gltf::Shader {
-    Mesh(Engine& engine, const glm::mat4& model) : engine(engine), gltf::Shader("Marry.gltf", "phong", engine) {
+    Mesh(Engine& engine, const glm::mat4& model) : engine(engine), gltf::Shader("marry.gltf", "phong", engine) {
         vert_formats = {vk::Format::eR32G32B32Sfloat, vk::Format::eR32G32B32Sfloat, vk::Format::eR32G32Sfloat};
         write_uniform(2, model);  // model matrix
     }

@@ -25,7 +25,7 @@ class Engine {
     void loop();
     void destroy();
 
-    void add_mesh(std::unique_ptr<Shader> mesh) { scene->add_mesh(std::move(mesh)); }
+    void add_mesh(std::unique_ptr<IShader> mesh) { scene->add_mesh(std::move(mesh)); }
     void add_gui(std::unique_ptr<Gui> gui) { guis.push_back(std::move(gui)); }
     void set_player(std::unique_ptr<Player> player) { this->player = std::move(player); }
     void set_scene(std::unique_ptr<Scene> scene) { this->scene = std::move(scene); }

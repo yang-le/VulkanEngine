@@ -210,7 +210,7 @@ uint32_t Vulkan::attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderMod
     return drawId;
 }
 
-unsigned int Vulkan::renderBegin() {
+uint32_t Vulkan::renderBegin() {
     device.waitForFences(frame.drawFence(), vk::True, std::numeric_limits<uint64_t>::max());
 
     auto currentBuffer =
@@ -241,22 +241,28 @@ unsigned int Vulkan::renderBegin() {
 
 void Vulkan::updateVertex(uint32_t i, const Buffer& vertex) { vertexBuffer(i) = vertex; }
 
-void Vulkan::draw(uint32_t i) {
+void Vulkan::draw(uint32_t currentBuffer, uint32_t i) {
     frame.commandBuffer().bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipeline(i));
     if (descriptorSet(i))
         frame.commandBuffer().bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout(i), 0,
                                                  descriptorSet(i), nullptr);
+    if (renderPassBuilder.descriptorSets[currentBuffer])
+        frame.commandBuffer().bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout(i), 1,
+                                                 renderPassBuilder.descriptorSets[currentBuffer], nullptr);
     frame.commandBuffer().bindVertexBuffers(0, vertexBuffer(i).buffer, {0});
     frame.commandBuffer().draw((uint32_t)vertexBuffer(i).size / vertexBuffer(i).stride, 1, 0, 0);
 }
 
-void Vulkan::drawIndex(uint32_t i, const vk::Buffer& index, vk::DeviceSize indexOffset, vk::IndexType indexType,
-                       uint32_t count, const std::vector<vk::Buffer>& vertex,
+void Vulkan::drawIndex(uint32_t currentBuffer, uint32_t i, const vk::Buffer& index, vk::DeviceSize indexOffset,
+                       vk::IndexType indexType, uint32_t count, const std::vector<vk::Buffer>& vertex,
                        const std::vector<vk::DeviceSize>& vertexOffset) {
     frame.commandBuffer().bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipeline(i));
     if (descriptorSet(i))
         frame.commandBuffer().bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout(i), 0,
                                                  descriptorSet(i), nullptr);
+    if (renderPassBuilder.descriptorSets[currentBuffer])
+        frame.commandBuffer().bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout(i), 1,
+                                                 renderPassBuilder.descriptorSets[currentBuffer], nullptr);
     frame.commandBuffer().bindVertexBuffers(0, vertex, vertexOffset);
     frame.commandBuffer().bindIndexBuffer(index, indexOffset, indexType);
     frame.commandBuffer().pushConstants<uint32_t>(pipelineLayout(i), vk::ShaderStageFlagBits::eAll, 0, i);
@@ -265,7 +271,7 @@ void Vulkan::drawIndex(uint32_t i, const vk::Buffer& index, vk::DeviceSize index
 
 void Vulkan::nextSubpass() { frame.commandBuffer().nextSubpass(vk::SubpassContents::eInline); }
 
-void Vulkan::renderEnd(unsigned int currentBuffer) {
+void Vulkan::renderEnd(uint32_t currentBuffer) {
     frame.commandBuffer().endRenderPass();
     frame.commandBuffer().end();
 
@@ -286,7 +292,7 @@ void Vulkan::renderEnd(unsigned int currentBuffer) {
 
 void Vulkan::render() {
     auto currentBuffer = renderBegin();
-    for (unsigned i = 0; i < drawResources.size(); ++i) draw(i);
+    for (unsigned i = 0; i < drawResources.size(); ++i) draw(currentBuffer, i);
     renderEnd(currentBuffer);
 }
 
@@ -756,8 +762,13 @@ uint32_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const 
     std::array<vk::DynamicState, 2> dynamicStates = {vk::DynamicState::eViewport, vk::DynamicState::eScissor};
     vk::PipelineDynamicStateCreateInfo pipelineDynamicStateCreateInfo({}, dynamicStates);
 
-    pipelineLayout() = device.createPipelineLayout(
-        {{}, 1, &descriptorSetLayout(), pushConstant.size ? 1u : 0, pushConstant.size ? &pushConstant : nullptr});
+    std::array<vk::DescriptorSetLayout, 2> descriptorSetLayouts = {descriptorSetLayout(),
+                                                                   renderPassBuilder.descriptorSetLayout};
+    pipelineLayout() = device.createPipelineLayout({{},
+                                                    descriptorSetLayouts.size(),
+                                                    descriptorSetLayouts.data(),
+                                                    pushConstant.size ? 1u : 0,
+                                                    pushConstant.size ? &pushConstant : nullptr});
 
     vk::GraphicsPipelineCreateInfo graphicPipelineCreateInfo(
         {}, pipelineShaderStageCreateInfos, &vertexInfo, &pipelineInputAssemblyStateCreateInfo, nullptr,

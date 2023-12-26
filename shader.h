@@ -32,15 +32,26 @@ constexpr std::array<Ret, Size> hstack(const std::array<Tuples, Size>... arrays)
     return hstack<Ret>(std::make_index_sequence<Size>{}, arrays...);
 }
 
-struct Shader {
+struct IShader {
+    virtual ~IShader() = default;
+
+    virtual void init() = 0;
+    virtual void update() = 0;
+    virtual void draw(uint32_t currentBuffer) = 0;
+
+    virtual void load() = 0;
+    virtual void attach(uint32_t subpass = 0) = 0;
+};
+
+struct Shader : IShader {
     Shader() = default;
     Shader(const std::string &name, Engine &engine);
     virtual ~Shader();
 
     virtual void init();
     virtual void update() { write_uniform(1, camera->view); }
-    virtual void draw() {
-        if (draw_id != -1) vulkan->draw(draw_id);
+    virtual void draw(uint32_t currentBuffer) {
+        if (draw_id != -1) vulkan->draw(currentBuffer, draw_id);
     }
 
     virtual void load();
@@ -88,30 +99,48 @@ struct Shader {
     const Camera *camera;
 };
 
-template <size_t N>
-struct SubpassShader : Shader {
-    SubpassShader(Engine &engine);
+template <size_t N = 0>
+struct MultiShader : IShader {
+    using Container =
+        std::conditional_t<N == 0, std::vector<std::unique_ptr<IShader>>, std::array<std::unique_ptr<IShader>, N>>;
+
+    virtual void attach(uint32_t subpass = 0) override {
+        for (auto &shader : shaders) shader->attach(subpass);
+    }
 
     virtual void init() override {
-        for (auto &subpass : subpasses) subpasses.init();
+        for (auto &shader : shaders) shader->init();
     }
     virtual void update() override {
-        for (auto &subpass : subpasses) subpasses.update();
+        for (auto &shader : shaders) shader->update();
     }
     virtual void load() override {
-        for (auto &subpass : subpasses) subpasses.load();
+        for (auto &shader : shaders) shader->load();
     }
-    void attach() {
-        for (unsigned i = 0; i < N; ++i) subpasses[i].attach(i);
-    }
-    virtual void draw() override {
-        unsigned i;
-        for (i = 0; i < N - 1; ++i) {
-            subpasses[i].draw();
-            vulkan->nextSubpass();
-        }
-        subpasses[i].draw();
+    virtual void draw(uint32_t currentBuffer) override {
+        for (auto &shader : shaders) shader->draw(currentBuffer);
     }
 
-    std::array<std::unique_ptr<Shader>, N> subpasses;
+    Container shaders;
+};
+
+template <size_t N>
+struct SubpassShader : MultiShader<N> {
+    SubpassShader(Vulkan &vulkan) : vulkan(vulkan) {}
+
+    virtual void attach(uint32_t) override {
+        // this is the only way to attach the subpass shaders
+        for (unsigned i = 0; i < N; ++i) this->shaders[i]->attach(i);
+    }
+
+    virtual void draw(uint32_t currentBuffer) override {
+        unsigned i;
+        for (i = 0; i < N - 1; ++i) {
+            this->shaders[i]->draw(currentBuffer);
+            vulkan.nextSubpass();
+        }
+        this->shaders[i]->draw(currentBuffer);
+    }
+
+    Vulkan &vulkan;
 };

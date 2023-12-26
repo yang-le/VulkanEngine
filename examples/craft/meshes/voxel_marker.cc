@@ -23,14 +23,15 @@ VoxelMarkerMesh::VoxelMarkerMesh(Engine& engine, const World& world)
 void VoxelMarkerMesh::init() {
     Shader::init();
 
-    constexpr std::array<std::tuple<float, float, float>, 8> vertices = {std::tuple<float, float, float>{0.0f, 0.0f, 1.0f},
-                                                                         {1.0f, 0.0f, 1.0f},
-                                                                         {1.0f, 1.0f, 1.0f},
-                                                                         {0.0f, 1.0f, 1.0f},
-                                                                         {0.0f, 1.0f, 0.0f},
-                                                                         {0.0f, 0.0f, 0.0f},
-                                                                         {1.0f, 0.0f, 0.0f},
-                                                                         {1.0f, 1.0f, 0.0f}};
+    constexpr std::array<std::tuple<float, float, float>, 8> vertices = {
+        std::tuple<float, float, float>{0.0f, 0.0f, 1.0f},
+        {1.0f, 0.0f, 1.0f},
+        {1.0f, 1.0f, 1.0f},
+        {0.0f, 1.0f, 1.0f},
+        {0.0f, 1.0f, 0.0f},
+        {0.0f, 0.0f, 0.0f},
+        {1.0f, 0.0f, 0.0f},
+        {1.0f, 1.0f, 0.0f}};
     constexpr std::array<size_t, 36> indices = {0, 2, 3, 0, 1, 2, 1, 7, 2, 1, 6, 7, 6, 5, 4, 4, 7, 6,
                                                 3, 4, 5, 3, 5, 0, 3, 7, 4, 3, 2, 7, 0, 6, 1, 0, 5, 6};
 
@@ -61,8 +62,8 @@ void VoxelMarkerMesh::update() {
     write_uniform(3, interaction_mode);
 }
 
-void VoxelMarkerMesh::draw() {
-    if (voxel_id) Shader::draw();
+void VoxelMarkerMesh::draw(uint32_t currentBuffer) {
+    if (voxel_id) Shader::draw(currentBuffer);
 }
 
 void VoxelMarkerMesh::add_voxel() {

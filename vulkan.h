@@ -91,14 +91,14 @@ class Vulkan {
                           const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures,
                           vk::PrimitiveTopology primitiveTopology, uint32_t subpass,
                           vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack, bool autoDestroy = true);
-    unsigned int renderBegin();
+    uint32_t renderBegin();
     void updateVertex(uint32_t i, const Buffer& vertex);
-    void draw(uint32_t i);
-    void drawIndex(uint32_t i, const vk::Buffer& index, vk::DeviceSize indexOffset, vk::IndexType indexType,
-                   uint32_t count, const std::vector<vk::Buffer>& vertex,
+    void draw(uint32_t currentBuffer, uint32_t i);
+    void drawIndex(uint32_t currentBuffer, uint32_t i, const vk::Buffer& index, vk::DeviceSize indexOffset,
+                   vk::IndexType indexType, uint32_t count, const std::vector<vk::Buffer>& vertex,
                    const std::vector<vk::DeviceSize>& vertexOffset);
     void nextSubpass();
-    void renderEnd(unsigned int currentBuffer);
+    void renderEnd(uint32_t currentBuffer);
     void render();
     void resize(vk::Extent2D extent);
 

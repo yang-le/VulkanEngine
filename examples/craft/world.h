@@ -11,7 +11,7 @@ struct World : Shader {
     virtual void update() override;
     virtual void load() override;
     virtual void attach(uint32_t subpass = 0) override;
-    virtual void draw() override;
+    virtual void draw(uint32_t currentBuffer) override;
 
     const Camera& camera;
     // can we sparse this?

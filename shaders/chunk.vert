@@ -2,9 +2,15 @@
 
 layout(location = 0) in uint packed_data;
 
-layout(binding = 0) uniform m_proj_t { mat4 m_proj; };
-layout(binding = 1) uniform m_view_t { mat4 m_view; };
-layout(binding = 2) uniform m_model_t { mat4 m_model; };
+layout(binding = 0) uniform m_proj_t {
+    mat4 m_proj;
+};
+layout(binding = 1) uniform m_view_t {
+    mat4 m_view;
+};
+layout(binding = 2) uniform m_model_t {
+    mat4 m_model;
+};
 
 layout(location = 0) out int voxel_id;
 layout(location = 1) out int face_id;
@@ -14,22 +20,17 @@ layout(location = 4) out float frag_world_pos_y;
 
 const float ao_values[4] = float[4](0.1, 0.25, 0.5, 1.0);
 
-const float face_shading[6] = float[6](
-    1.0, 0.5,   // top bottom
-    0.5, 0.8,   // right left
-    0.5, 0.8    // front back
+const float face_shading[6] = float[6](1.0, 0.5,   // top bottom
+0.5, 0.8,   // right left
+0.5, 0.8    // front back
 );
 
-const vec2 uv_coords[4] = vec2[4](
-    vec2(0, 0), vec2(0, 1),
-    vec2(1, 0), vec2(1, 1)
-);
+const vec2 uv_coords[4] = vec2[4](vec2(0, 0), vec2(0, 1), vec2(1, 0), vec2(1, 1));
 
-const int uv_indices[24] = int[24](
-    1, 0, 2, 1, 2, 3,   // tex coords indices for vertices of an even face
-    3, 0, 2, 3, 1, 0,   // odd face
-    3, 1, 0, 3, 0, 2,   // even flipped face
-    1, 2, 3, 1, 0, 2    // odd flipped face
+const int uv_indices[24] = int[24](1, 0, 2, 1, 2, 3,   // tex coords indices for vertices of an even face
+3, 0, 2, 3, 1, 0,   // odd face
+3, 1, 0, 3, 0, 2,   // even flipped face
+1, 2, 3, 1, 0, 2    // odd flipped face
 );
 
 int x, y, z;

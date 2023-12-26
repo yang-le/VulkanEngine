@@ -10,7 +10,9 @@ layout(location = 2) in vec2 uv;
 layout(location = 3) in float shading;
 layout(location = 4) in float frag_world_pos_y;
 
-layout(binding = 3) uniform bg_color_t { vec3 bg_color; };
+layout(binding = 3) uniform bg_color_t {
+    vec3 bg_color;
+};
 layout(binding = 4) uniform sampler2DArray u_texture_array;
 
 layout(location = 0) out vec4 fragColor;
@@ -26,7 +28,7 @@ void main() {
     tex_col *= shading;
 
     // underwater effect
-    if (frag_world_pos_y < water_line)
+    if(frag_world_pos_y < water_line)
         tex_col *= vec3(0.0, 0.3, 1.0);
 
     // fog

@@ -1,6 +1,8 @@
 #version 450
 
-layout(binding = 3) uniform bg_color_t { vec3 bg_color; };
+layout(binding = 3) uniform bg_color_t {
+    vec3 bg_color;
+};
 
 layout(location = 0) out vec4 fragColor;
 

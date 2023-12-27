@@ -29,7 +29,7 @@ struct McScene : Scene {
 };
 
 struct McPlayer : public Player {
-    McPlayer(Engine& engine) : engine(engine), Player(engine, 5, MOUSE_SENSITIVITY, V_FOV, ASPECT_RATIO, ZNEAR, ZFAR) {
+    McPlayer(Engine& engine) : engine(engine), Player(engine, V_FOV, ASPECT_RATIO, ZNEAR, ZFAR, 5, MOUSE_SENSITIVITY) {
         position = PLAYER_POS;
     }
     virtual void handle_events(int button, int action) override {

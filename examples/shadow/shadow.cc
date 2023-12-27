@@ -70,6 +70,9 @@ struct Shadow : gltf::Shader {
     }
 };
 
+// TODO: It's not suitable for this shadow example to use a 2-subpass render
+// Will back to try this using https://github.com/SaschaWillems/Vulkan/tree/master/examples/shadowmapping
+
 int main(int argc, char* argv[]) {
     // we have 3 attachments in total:
     // attachment 0: the framebuffer color

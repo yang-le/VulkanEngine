@@ -179,7 +179,7 @@ uint32_t Vulkan::attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderMod
     drawResources.push_back({});
     vertexBuffer() = vertex;
 
-    if (uniforms.size() || textures.size()) initDescriptorSet(uniforms, textures);
+    if (!uniforms.empty() || !textures.empty()) initDescriptorSet(uniforms, textures);
     uint32_t drawId =
         initPipeline(vertexShaderModule, fragmentShaderModule, vertex.stride, vertexFormats, subpass, cullMode);
 
@@ -198,7 +198,7 @@ uint32_t Vulkan::attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderMod
                               bool autoDestroy) {
     drawResources.push_back({});
 
-    if (uniforms.size() || textures.size()) initDescriptorSet(uniforms, textures);
+    if (!uniforms.empty() || !textures.empty()) initDescriptorSet(uniforms, textures);
     uint32_t drawId = initPipeline(vertexShaderModule, fragmentShaderModule, vertexStrides, vertexFormats,
                                    primitiveTopology, subpass, cullMode);
 
@@ -477,7 +477,7 @@ void Vulkan::initInstance() {
         dl.template getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
     VULKAN_HPP_DEFAULT_DISPATCHER.init(getInstanceProcAddr);
 
-    if (!applicationInfo.apiVersion) applicationInfo.apiVersion = VK_API_VERSION_1_0;
+    if (!applicationInfo.apiVersion) applicationInfo.apiVersion = VK_API_VERSION_1_1;
     instanceCreateInfo.setPApplicationInfo(&applicationInfo);
     instance = vk::createInstance(instanceCreateInfo);
     VULKAN_HPP_DEFAULT_DISPATCHER.init(instance);
@@ -626,7 +626,7 @@ void Vulkan::initSwapChain(vk::Extent2D extent) {
 }
 
 void Vulkan::initDescriptorSet(const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures) {
-    assert(uniforms.size() || textures.size());
+    assert(!uniforms.empty() || !textures.empty());
 
     std::array<vk::DescriptorPoolSize, 2> poolSizes;
     poolSizes[0] = {vk::DescriptorType::eUniformBuffer, (uint32_t)uniforms.size()};
@@ -686,8 +686,8 @@ void Vulkan::initFrameBuffers() {
     framebuffers.reserve(swapChainImageViews.size());
     for (unsigned j = 0; j < swapChainImageViews.size(); ++j) {
         attachments[0] = swapChainImageViews[j];
-        for (unsigned i = 1; i < renderPassBuilder.attachmentDescriptions.size(); ++i)
-            attachments[i] = renderPassBuilder.imageViews[j][i - 1];
+        for (unsigned i = 0; i < renderPassBuilder.attachmentDescriptions.size() - 1; ++i)
+            attachments[1 + i] = renderPassBuilder.imageViews[j][i];
         framebuffers.push_back(device.createFramebuffer(framebufferCreateInfo));
     }
 }
@@ -988,7 +988,7 @@ Vulkan::RenderPassBuilder& Vulkan::RenderPassBuilder::addSubpass(const std::init
 
     subpassDescriptions.emplace_back(vk::SubpassDescriptionFlags{}, vk::PipelineBindPoint::eGraphics, *inputReferences,
                                      *colorReferences, vk::ArrayProxyNoTemporaries<const vk::AttachmentReference>{},
-                                     &depthReference);
+                                     depthReference.get());
 
     attachmentReferences.push_back(colorReferences);
     attachmentReferences.push_back(inputReferences);
@@ -1128,7 +1128,7 @@ void Vulkan::RenderPassBuilder::destroyImages(const vk::Device& device, const Vm
 vk::RenderPass Vulkan::RenderPassBuilder::build(const vk::Device& device, const vk::Format& frameFormat) {
     attachmentDescriptions.front().setFormat(frameFormat);
 
-    if (!subpassDescriptions.size()) addSubpass({0});
+    if (subpassDescriptions.empty()) addSubpass({0});
 
     // This makes sure that writes to the depth image are done before we try to write to it again
     dependencies.emplace_back(
@@ -1178,8 +1178,9 @@ Vulkan::RenderPassBuilder Vulkan::makeRenderPassBuilder(const vk::ArrayProxy<vk:
         vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eDontCare, vk::AttachmentLoadOp::eDontCare,
         vk::AttachmentStoreOp::eDontCare, vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthStencilAttachmentOptimal);
 
-    builder.depthReference = {static_cast<uint32_t>(builder.attachmentDescriptions.size() - 1),
-                              vk::ImageLayout::eDepthStencilAttachmentOptimal};
+    builder.depthReference =
+        std::make_shared<vk::AttachmentReference>(static_cast<uint32_t>(builder.attachmentDescriptions.size() - 1),
+                                                  vk::ImageLayout::eDepthStencilAttachmentOptimal);
 
     return builder;
 }

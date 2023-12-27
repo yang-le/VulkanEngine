@@ -51,7 +51,7 @@ class Vulkan {
         void destroy(const vk::Device& device);
         void destroyImages(const vk::Device& device, const VmaAllocator& vmaAllocator);
 
-        vk::AttachmentReference depthReference;
+        std::shared_ptr<vk::AttachmentReference> depthReference;
         std::vector<vk::AttachmentDescription> attachmentDescriptions;
         std::vector<vk::SubpassDescription> subpassDescriptions;
         std::vector<vk::SubpassDependency> dependencies;

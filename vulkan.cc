@@ -59,6 +59,7 @@ bool GLSLtoSPV(const vk::ShaderStageFlagBits shaderType, const std::string& glsl
 
     glslang::TShader shader(stage);
     shader.setStrings(shaderStrings, 1);
+    shader.setPreamble("#extension GL_GOOGLE_include_directive : enable\n");
 
     // Enable SPIR-V and Vulkan rules when parsing GLSL
     EShMessages messages = (EShMessages)(EShMsgSpvRules | EShMsgVulkanRules);
@@ -87,6 +88,187 @@ bool GLSLtoSPV(const vk::ShaderStageFlagBits shaderType, const std::string& glsl
 
     glslang::GlslangToSpv(*program.getIntermediate(stage), spvShader);
     return true;
+}
+
+void setImageLayout(const vk::CommandBuffer& commandBuffer, vk::Image image, vk::Format format,
+                    vk::ImageLayout oldLayout, vk::ImageLayout newLayout, uint32_t mipLevel = 0,
+                    uint32_t layerCount = 1, uint32_t mipCount = 1) {
+    vk::AccessFlags sourceAccessMask;
+    switch (oldLayout) {
+        case vk::ImageLayout::eTransferDstOptimal:
+            sourceAccessMask = vk::AccessFlagBits::eTransferWrite;
+            break;
+        case vk::ImageLayout::eTransferSrcOptimal:
+            sourceAccessMask = vk::AccessFlagBits::eTransferRead;
+            break;
+        case vk::ImageLayout::ePreinitialized:
+            sourceAccessMask = vk::AccessFlagBits::eHostWrite;
+            break;
+        case vk::ImageLayout::eGeneral:  // sourceAccessMask is empty
+            [[fallthrough]];
+        case vk::ImageLayout::eUndefined:
+            break;
+        default:
+            assert(false);
+            break;
+    }
+
+    vk::PipelineStageFlags sourceStage;
+    switch (oldLayout) {
+        case vk::ImageLayout::eGeneral:
+            [[fallthrough]];
+        case vk::ImageLayout::ePreinitialized:
+            sourceStage = vk::PipelineStageFlagBits::eHost;
+            break;
+        case vk::ImageLayout::eTransferSrcOptimal:
+            [[fallthrough]];
+        case vk::ImageLayout::eTransferDstOptimal:
+            sourceStage = vk::PipelineStageFlagBits::eTransfer;
+            break;
+        case vk::ImageLayout::eUndefined:
+            sourceStage = vk::PipelineStageFlagBits::eTopOfPipe;
+            break;
+        default:
+            assert(false);
+            break;
+    }
+
+    vk::AccessFlags destinationAccessMask;
+    switch (newLayout) {
+        case vk::ImageLayout::eColorAttachmentOptimal:
+            destinationAccessMask = vk::AccessFlagBits::eColorAttachmentWrite;
+            break;
+        case vk::ImageLayout::eDepthStencilAttachmentOptimal:
+            destinationAccessMask =
+                vk::AccessFlagBits::eDepthStencilAttachmentRead | vk::AccessFlagBits::eDepthStencilAttachmentWrite;
+            break;
+        case vk::ImageLayout::eGeneral:  // empty destinationAccessMask
+            [[fallthrough]];
+        case vk::ImageLayout::ePresentSrcKHR:
+            break;
+        case vk::ImageLayout::eShaderReadOnlyOptimal:
+            destinationAccessMask = vk::AccessFlagBits::eShaderRead;
+            break;
+        case vk::ImageLayout::eTransferSrcOptimal:
+            destinationAccessMask = vk::AccessFlagBits::eTransferRead;
+            break;
+        case vk::ImageLayout::eTransferDstOptimal:
+            destinationAccessMask = vk::AccessFlagBits::eTransferWrite;
+            break;
+        default:
+            assert(false);
+            break;
+    }
+
+    vk::PipelineStageFlags destinationStage;
+    switch (newLayout) {
+        case vk::ImageLayout::eColorAttachmentOptimal:
+            destinationStage = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+            break;
+        case vk::ImageLayout::eDepthStencilAttachmentOptimal:
+            destinationStage = vk::PipelineStageFlagBits::eEarlyFragmentTests;
+            break;
+        case vk::ImageLayout::eGeneral:
+            destinationStage = vk::PipelineStageFlagBits::eHost;
+            break;
+        case vk::ImageLayout::ePresentSrcKHR:
+            destinationStage = vk::PipelineStageFlagBits::eBottomOfPipe;
+            break;
+        case vk::ImageLayout::eShaderReadOnlyOptimal:
+            destinationStage = vk::PipelineStageFlagBits::eFragmentShader;
+            break;
+        case vk::ImageLayout::eTransferDstOptimal:
+            [[fallthrough]];
+        case vk::ImageLayout::eTransferSrcOptimal:
+            destinationStage = vk::PipelineStageFlagBits::eTransfer;
+            break;
+        default:
+            assert(false);
+            break;
+    }
+
+    vk::ImageAspectFlags aspectMask;
+    if (newLayout == vk::ImageLayout::eDepthStencilAttachmentOptimal) {
+        aspectMask = vk::ImageAspectFlagBits::eDepth;
+        if (format == vk::Format::eD32SfloatS8Uint || format == vk::Format::eD24UnormS8Uint) {
+            aspectMask |= vk::ImageAspectFlagBits::eStencil;
+        }
+    } else {
+        aspectMask = vk::ImageAspectFlagBits::eColor;
+    }
+
+    vk::ImageMemoryBarrier imageMemoryBarrier(sourceAccessMask, destinationAccessMask, oldLayout, newLayout,
+                                              vk::QueueFamilyIgnored, vk::QueueFamilyIgnored, image,
+                                              {aspectMask, mipLevel, mipCount, 0, layerCount});
+    commandBuffer.pipelineBarrier(sourceStage, destinationStage, {}, nullptr, nullptr, imageMemoryBarrier);
+}
+
+vk::SurfaceFormatKHR pickSurfaceFormat(const std::vector<vk::SurfaceFormatKHR>& formats) {
+    assert(!formats.empty());
+    vk::SurfaceFormatKHR pickedFormat = formats[0];
+    if (formats.size() == 1) {
+        if (formats[0].format == vk::Format::eUndefined) {
+            pickedFormat.format = vk::Format::eR8G8B8A8Unorm;
+            pickedFormat.colorSpace = vk::ColorSpaceKHR::eSrgbNonlinear;
+        }
+    } else {
+        for (auto& requestedFormat : {vk::Format::eR8G8B8A8Unorm, vk::Format::eB8G8R8A8Unorm, vk::Format::eR8G8B8Unorm,
+                                      vk::Format::eB8G8R8Unorm}) {
+            auto it = std::find_if(formats.begin(), formats.end(), [requestedFormat](const vk::SurfaceFormatKHR& f) {
+                return f.format == requestedFormat && f.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear;
+            });
+            if (it != formats.end()) {
+                pickedFormat = *it;
+                break;
+            }
+        }
+    }
+    assert(pickedFormat.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear);
+    return pickedFormat;
+}
+
+std::pair<vk::Buffer, VmaAllocation> createBuffer(const VmaAllocator& vmaAllocator, vk::DeviceSize bufferSize,
+                                                  vk::BufferUsageFlags bufferUsage,
+                                                  vk::MemoryPropertyFlags bufferProp = {}) {
+    vk::BufferCreateInfo bufferCreateInfo({}, bufferSize, bufferUsage);
+
+    VmaAllocationCreateInfo allocInfo = {};
+    allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    if (bufferProp) {
+        if (bufferProp & vk::MemoryPropertyFlagBits::eHostVisible)
+            allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        allocInfo.requiredFlags = static_cast<VkMemoryPropertyFlags>(bufferProp);
+    }
+
+    vk::Buffer buffer;
+    VmaAllocation bufferMemory;
+    vmaCreateBuffer(vmaAllocator, reinterpret_cast<const VkBufferCreateInfo*>(&bufferCreateInfo), &allocInfo,
+                    reinterpret_cast<VkBuffer*>(&buffer), &bufferMemory, nullptr);
+
+    return {buffer, bufferMemory};
+}
+
+std::pair<vk::Image, VmaAllocation> createImage(const VmaAllocator& vmaAllocator, vk::Extent2D extent,
+                                                vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage,
+                                                vk::ImageLayout layout = vk::ImageLayout::eUndefined,
+                                                uint32_t mipLevels = 1, uint32_t layers = 1) {
+    vk::ImageCreateInfo imageCreateInfo({}, vk::ImageType::e2D, format, vk::Extent3D(extent, 1), mipLevels, layers,
+                                        vk::SampleCountFlagBits::e1, tiling, usage, vk::SharingMode::eExclusive, {},
+                                        layout);
+
+    VmaAllocationCreateInfo allocInfo = {};
+    allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    if (usage & vk::ImageUsageFlagBits::eTransientAttachment)
+        allocInfo.preferredFlags = VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT;
+    else if (layout == vk::ImageLayout::ePreinitialized)
+        allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+
+    vk::Image image;
+    VmaAllocation imageMemory;
+    vmaCreateImage(vmaAllocator, reinterpret_cast<const VkImageCreateInfo*>(&imageCreateInfo), &allocInfo,
+                   reinterpret_cast<VkImage*>(&image), &imageMemory, nullptr);
+
+    return {image, imageMemory};
 }
 }  // namespace
 
@@ -310,7 +492,7 @@ void Vulkan::resize(vk::Extent2D extent) {
 Vulkan::Buffer Vulkan::createUniformBuffer(vk::DeviceSize size) {
     Buffer buffer;
     std::tie(buffer.buffer, buffer.memory) =
-        createBuffer(size, vk::BufferUsageFlagBits::eUniformBuffer,
+        createBuffer(vmaAllocator, size, vk::BufferUsageFlagBits::eUniformBuffer,
                      vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 
     buffer.stride = 0;
@@ -333,7 +515,7 @@ Vulkan::Buffer Vulkan::createVertexBuffer(const void* vertices, uint32_t stride,
     buffer.size = stride * size;
 
     std::tie(buffer.buffer, buffer.memory) =
-        createBuffer(buffer.size, vk::BufferUsageFlagBits::eVertexBuffer,
+        createBuffer(vmaAllocator, buffer.size, vk::BufferUsageFlagBits::eVertexBuffer,
                      vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 
     vmaMapMemory(vmaAllocator, buffer.memory, &buffer.data);
@@ -353,7 +535,7 @@ Vulkan::Buffer Vulkan::createGltfBuffer(const void* data, size_t size) {
     buffer.size = size;
 
     std::tie(buffer.buffer, buffer.memory) =
-        createBuffer(buffer.size,
+        createBuffer(vmaAllocator, buffer.size,
                      vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eIndexBuffer |
                          vk::BufferUsageFlagBits::eUniformBuffer,
                      vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
@@ -389,13 +571,13 @@ Vulkan::Texture Vulkan::createTexture(vk::Extent2D extent, const void* data, uin
     }
 
     std::tie(texture.image, texture.memory) = createImage(
-        extent, format, needStaging ? vk::ImageTiling::eOptimal : vk::ImageTiling::eLinear,
+        vmaAllocator, extent, format, needStaging ? vk::ImageTiling::eOptimal : vk::ImageTiling::eLinear,
         vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eTransferSrc,
         needStaging ? vk::ImageLayout::eUndefined : vk::ImageLayout::ePreinitialized, mipLevels, layers);
 
     if (needStaging)
         std::tie(texture.stagingBuffer, texture.stagingMemory) =
-            createBuffer(extent.width * extent.height * layers * 4, vk::BufferUsageFlagBits::eTransferSrc,
+            createBuffer(vmaAllocator, extent.width * extent.height * layers * 4, vk::BufferUsageFlagBits::eTransferSrc,
                          vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 
     void* textureData;
@@ -793,189 +975,6 @@ void Vulkan::destroySwapChain() {
     renderPassBuilder.destroyImages(device, vmaAllocator);
 }
 
-//
-// Utils
-//
-
-vk::SurfaceFormatKHR Vulkan::pickSurfaceFormat(const std::vector<vk::SurfaceFormatKHR>& formats) {
-    assert(!formats.empty());
-    vk::SurfaceFormatKHR pickedFormat = formats[0];
-    if (formats.size() == 1) {
-        if (formats[0].format == vk::Format::eUndefined) {
-            pickedFormat.format = vk::Format::eR8G8B8A8Unorm;
-            pickedFormat.colorSpace = vk::ColorSpaceKHR::eSrgbNonlinear;
-        }
-    } else {
-        for (auto& requestedFormat : {vk::Format::eR8G8B8A8Unorm, vk::Format::eB8G8R8A8Unorm, vk::Format::eR8G8B8Unorm,
-                                      vk::Format::eB8G8R8Unorm}) {
-            auto it = std::find_if(formats.begin(), formats.end(), [requestedFormat](const vk::SurfaceFormatKHR& f) {
-                return f.format == requestedFormat && f.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear;
-            });
-            if (it != formats.end()) {
-                pickedFormat = *it;
-                break;
-            }
-        }
-    }
-    assert(pickedFormat.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear);
-    return pickedFormat;
-}
-
-std::pair<vk::Buffer, VmaAllocation> Vulkan::createBuffer(vk::DeviceSize bufferSize, vk::BufferUsageFlags bufferUsage,
-                                                          vk::MemoryPropertyFlags bufferProp) {
-    vk::BufferCreateInfo bufferCreateInfo({}, bufferSize, bufferUsage);
-
-    VmaAllocationCreateInfo allocInfo = {};
-    allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-    if (bufferProp) {
-        if (bufferProp & vk::MemoryPropertyFlagBits::eHostVisible)
-            allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-        allocInfo.requiredFlags = static_cast<VkMemoryPropertyFlags>(bufferProp);
-    }
-
-    vk::Buffer buffer;
-    VmaAllocation bufferMemory;
-    vmaCreateBuffer(vmaAllocator, reinterpret_cast<const VkBufferCreateInfo*>(&bufferCreateInfo), &allocInfo,
-                    reinterpret_cast<VkBuffer*>(&buffer), &bufferMemory, nullptr);
-
-    return {buffer, bufferMemory};
-}
-
-std::pair<vk::Image, VmaAllocation> Vulkan::createImage(vk::Extent2D extent, vk::Format format, vk::ImageTiling tiling,
-                                                        vk::ImageUsageFlags usage, vk::ImageLayout layout,
-                                                        uint32_t mipLevels, uint32_t layers) {
-    vk::ImageCreateInfo imageCreateInfo({}, vk::ImageType::e2D, format, vk::Extent3D(extent, 1), mipLevels, layers,
-                                        vk::SampleCountFlagBits::e1, tiling, usage, vk::SharingMode::eExclusive, {},
-                                        layout);
-
-    VmaAllocationCreateInfo allocInfo = {};
-    allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-    if (usage & vk::ImageUsageFlagBits::eTransientAttachment)
-        allocInfo.preferredFlags = VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT;
-    else if (layout == vk::ImageLayout::ePreinitialized)
-        allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-
-    vk::Image image;
-    VmaAllocation imageMemory;
-    vmaCreateImage(vmaAllocator, reinterpret_cast<const VkImageCreateInfo*>(&imageCreateInfo), &allocInfo,
-                   reinterpret_cast<VkImage*>(&image), &imageMemory, nullptr);
-
-    return {image, imageMemory};
-}
-
-void Vulkan::setImageLayout(const vk::CommandBuffer& commandBuffer, vk::Image image, vk::Format format,
-                            vk::ImageLayout oldLayout, vk::ImageLayout newLayout, uint32_t mipLevel,
-                            uint32_t layerCount, uint32_t mipCount) {
-    vk::AccessFlags sourceAccessMask;
-    switch (oldLayout) {
-        case vk::ImageLayout::eTransferDstOptimal:
-            sourceAccessMask = vk::AccessFlagBits::eTransferWrite;
-            break;
-        case vk::ImageLayout::eTransferSrcOptimal:
-            sourceAccessMask = vk::AccessFlagBits::eTransferRead;
-            break;
-        case vk::ImageLayout::ePreinitialized:
-            sourceAccessMask = vk::AccessFlagBits::eHostWrite;
-            break;
-        case vk::ImageLayout::eGeneral:  // sourceAccessMask is empty
-            [[fallthrough]];
-        case vk::ImageLayout::eUndefined:
-            break;
-        default:
-            assert(false);
-            break;
-    }
-
-    vk::PipelineStageFlags sourceStage;
-    switch (oldLayout) {
-        case vk::ImageLayout::eGeneral:
-            [[fallthrough]];
-        case vk::ImageLayout::ePreinitialized:
-            sourceStage = vk::PipelineStageFlagBits::eHost;
-            break;
-        case vk::ImageLayout::eTransferSrcOptimal:
-            [[fallthrough]];
-        case vk::ImageLayout::eTransferDstOptimal:
-            sourceStage = vk::PipelineStageFlagBits::eTransfer;
-            break;
-        case vk::ImageLayout::eUndefined:
-            sourceStage = vk::PipelineStageFlagBits::eTopOfPipe;
-            break;
-        default:
-            assert(false);
-            break;
-    }
-
-    vk::AccessFlags destinationAccessMask;
-    switch (newLayout) {
-        case vk::ImageLayout::eColorAttachmentOptimal:
-            destinationAccessMask = vk::AccessFlagBits::eColorAttachmentWrite;
-            break;
-        case vk::ImageLayout::eDepthStencilAttachmentOptimal:
-            destinationAccessMask =
-                vk::AccessFlagBits::eDepthStencilAttachmentRead | vk::AccessFlagBits::eDepthStencilAttachmentWrite;
-            break;
-        case vk::ImageLayout::eGeneral:  // empty destinationAccessMask
-            [[fallthrough]];
-        case vk::ImageLayout::ePresentSrcKHR:
-            break;
-        case vk::ImageLayout::eShaderReadOnlyOptimal:
-            destinationAccessMask = vk::AccessFlagBits::eShaderRead;
-            break;
-        case vk::ImageLayout::eTransferSrcOptimal:
-            destinationAccessMask = vk::AccessFlagBits::eTransferRead;
-            break;
-        case vk::ImageLayout::eTransferDstOptimal:
-            destinationAccessMask = vk::AccessFlagBits::eTransferWrite;
-            break;
-        default:
-            assert(false);
-            break;
-    }
-
-    vk::PipelineStageFlags destinationStage;
-    switch (newLayout) {
-        case vk::ImageLayout::eColorAttachmentOptimal:
-            destinationStage = vk::PipelineStageFlagBits::eColorAttachmentOutput;
-            break;
-        case vk::ImageLayout::eDepthStencilAttachmentOptimal:
-            destinationStage = vk::PipelineStageFlagBits::eEarlyFragmentTests;
-            break;
-        case vk::ImageLayout::eGeneral:
-            destinationStage = vk::PipelineStageFlagBits::eHost;
-            break;
-        case vk::ImageLayout::ePresentSrcKHR:
-            destinationStage = vk::PipelineStageFlagBits::eBottomOfPipe;
-            break;
-        case vk::ImageLayout::eShaderReadOnlyOptimal:
-            destinationStage = vk::PipelineStageFlagBits::eFragmentShader;
-            break;
-        case vk::ImageLayout::eTransferDstOptimal:
-            [[fallthrough]];
-        case vk::ImageLayout::eTransferSrcOptimal:
-            destinationStage = vk::PipelineStageFlagBits::eTransfer;
-            break;
-        default:
-            assert(false);
-            break;
-    }
-
-    vk::ImageAspectFlags aspectMask;
-    if (newLayout == vk::ImageLayout::eDepthStencilAttachmentOptimal) {
-        aspectMask = vk::ImageAspectFlagBits::eDepth;
-        if (format == vk::Format::eD32SfloatS8Uint || format == vk::Format::eD24UnormS8Uint) {
-            aspectMask |= vk::ImageAspectFlagBits::eStencil;
-        }
-    } else {
-        aspectMask = vk::ImageAspectFlagBits::eColor;
-    }
-
-    vk::ImageMemoryBarrier imageMemoryBarrier(sourceAccessMask, destinationAccessMask, oldLayout, newLayout,
-                                              vk::QueueFamilyIgnored, vk::QueueFamilyIgnored, image,
-                                              {aspectMask, mipLevel, mipCount, 0, layerCount});
-    commandBuffer.pipelineBarrier(sourceStage, destinationStage, {}, nullptr, nullptr, imageMemoryBarrier);
-}
-
 Vulkan::RenderPassBuilder& Vulkan::RenderPassBuilder::addSubpass(const std::initializer_list<uint32_t>& colors,
                                                                  const std::initializer_list<uint32_t>& inputs) {
     auto colorReferences = std::make_shared<std::vector<vk::AttachmentReference>>();
@@ -1030,9 +1029,9 @@ void Vulkan::RenderPassBuilder::buildImages(Vulkan& vulkan) {
             }
 
             auto image =
-                vulkan.createImage(vulkan.imageExtent, attachmentDescriptions[i].format, tiling,
-                                   vk::ImageUsageFlagBits::eInputAttachment | vk::ImageUsageFlagBits::eColorAttachment |
-                                       vk::ImageUsageFlagBits::eTransientAttachment);
+                createImage(vulkan.vmaAllocator, vulkan.imageExtent, attachmentDescriptions[i].format, tiling,
+                            vk::ImageUsageFlagBits::eInputAttachment | vk::ImageUsageFlagBits::eColorAttachment |
+                                vk::ImageUsageFlagBits::eTransientAttachment);
             vk::ImageView imageView = vulkan.device.createImageView({{},
                                                                      image.first,
                                                                      vk::ImageViewType::e2D,
@@ -1054,10 +1053,10 @@ void Vulkan::RenderPassBuilder::buildImages(Vulkan& vulkan) {
             throw std::runtime_error("DepthAttachment format not supported.");
         }
 
-        auto image = vulkan.createImage(vulkan.imageExtent, attachmentDescriptions[i].format, tiling,
-                                        vk::ImageUsageFlagBits::eInputAttachment |
-                                            vk::ImageUsageFlagBits::eDepthStencilAttachment |
-                                            vk::ImageUsageFlagBits::eTransientAttachment);
+        auto image =
+            createImage(vulkan.vmaAllocator, vulkan.imageExtent, attachmentDescriptions[i].format, tiling,
+                        vk::ImageUsageFlagBits::eInputAttachment | vk::ImageUsageFlagBits::eDepthStencilAttachment |
+                            vk::ImageUsageFlagBits::eTransientAttachment);
         vk::ImageView imageView = vulkan.device.createImageView({{},
                                                                  image.first,
                                                                  vk::ImageViewType::e2D,

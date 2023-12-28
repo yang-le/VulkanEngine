@@ -1,7 +1,5 @@
 #version 450
 
-#extension GL_GOOGLE_include_directive : enable
-
 #include "constants.h"
 
 layout(input_attachment_index = 0, set = 1, binding = 0) uniform subpassInput uShadowMap;

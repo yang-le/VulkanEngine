@@ -13,17 +13,11 @@
 
 class Engine {
    public:
-    Engine(uint32_t width, uint32_t height) : width(width), height(height) {}
+    Engine(uint32_t width, uint32_t height, const Vulkan::RenderPassBuilder& builder = {},
+           uint32_t renderPassCount = 1);
+    ~Engine();
 
-    void run() {
-        init();
-        loop();
-        destroy();
-    }
-
-    void init(const Vulkan::RenderPassBuilder& builder = {});
-    void loop();
-    void destroy();
+    void run();
 
     void add_mesh(std::unique_ptr<IShader> mesh) { scene->add_mesh(std::move(mesh)); }
     void add_gui(std::unique_ptr<Gui> gui) { guis.push_back(std::move(gui)); }

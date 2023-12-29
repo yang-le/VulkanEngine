@@ -6,7 +6,8 @@
 
 #include <iostream>
 
-void Engine::init(const Vulkan::RenderPassBuilder& builder) {
+Engine::Engine(uint32_t width, uint32_t height, const Vulkan::RenderPassBuilder& builder, uint32_t renderPassCount)
+    : width(width), height(height) {
     start_time = std::chrono::system_clock::now();
     glfwInit();
 
@@ -17,12 +18,15 @@ void Engine::init(const Vulkan::RenderPassBuilder& builder) {
     const char** extensions = glfwGetRequiredInstanceExtensions(&count);
     if (!extensions) throw std::runtime_error("GLFW cannot create Vulkan window surfaces!");
 
-    vulkan.setInstanceExtensions({count, extensions}).setRenderPassBuilder(builder);
-    vulkan.init({width, height}, [this](const vk::Instance& instance) {
-        VkSurfaceKHR surfaceKHR = VK_NULL_HANDLE;
-        glfwCreateWindowSurface(instance, window, nullptr, &surfaceKHR);
-        return surfaceKHR;
-    });
+    vulkan.setInstanceExtensions({count, extensions});
+    vulkan.init(
+        {width, height},
+        [this](const vk::Instance& instance) {
+            VkSurfaceKHR surfaceKHR = VK_NULL_HANDLE;
+            glfwCreateWindowSurface(instance, window, nullptr, &surfaceKHR);
+            return surfaceKHR;
+        },
+        builder, renderPassCount + 1);
 
     glfwSetWindowUserPointer(window, this);
     glfwSetMouseButtonCallback(window, [](GLFWwindow* window, int button, int action, int mods) {
@@ -97,14 +101,16 @@ void Engine::init(const Vulkan::RenderPassBuilder& builder) {
     init_info.QueueFamily = vulkan.graphicsQueueFamliyIndex;
     init_info.Queue = vulkan.graphicsQueue;
     init_info.DescriptorPool = imgui_pool;
-    init_info.MinImageCount = vulkan.imageCount;
-    init_info.ImageCount = vulkan.imageCount;
-    ImGui_ImplVulkan_Init(&init_info, vulkan.renderPass);
+    init_info.MinImageCount = vulkan.minImageCount;
+    init_info.ImageCount = vulkan.minImageCount;
+
+    vulkan.addRenderPass({}, true);
+    ImGui_ImplVulkan_Init(&init_info, vulkan.renderPass());
 
     add_gui(std::make_unique<EngineGui>(*this));
 }
 
-void Engine::destroy() {
+Engine::~Engine() {
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
@@ -115,7 +121,7 @@ void Engine::destroy() {
     glfwTerminate();
 }
 
-void Engine::loop() {
+void Engine::run() {
     scene->init();
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
@@ -136,9 +142,9 @@ void Engine::render() {
     mouse_dx = mouse_dy = 0;
 
     try {
-        auto currentBuffer = vulkan.renderBegin();
+        vulkan.renderBegin();
 
-        scene->draw(currentBuffer);
+        scene->draw();
 
         if (imgui_show) {
             // Start the Dear ImGui frame
@@ -149,10 +155,13 @@ void Engine::render() {
             ImGui::Render();
             ImDrawData* draw_data = ImGui::GetDrawData();
             const bool is_minimized = (draw_data->DisplaySize.x <= 0.0f || draw_data->DisplaySize.y <= 0.0f);
-            if (!is_minimized) ImGui_ImplVulkan_RenderDrawData(draw_data, vulkan.frame.commandBuffer());
+            if (!is_minimized) {
+                vulkan.nextPass();
+                ImGui_ImplVulkan_RenderDrawData(draw_data, vulkan.frame.commandBuffer());
+            }
         }
 
-        vulkan.renderEnd(currentBuffer);
+        vulkan.renderEnd();
     } catch (const std::runtime_error& e) {
         if (!strcmp(e.what(), "resize")) {
             int width = 0, height = 0;

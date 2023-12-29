@@ -8,7 +8,7 @@ struct VoxelMarkerMesh : Shader {
 
     virtual void init() override;
     virtual void update() override;
-    virtual void draw(uint32_t currentBuffer) override;
+    virtual void draw() override;
 
     void add_voxel();
     void rebuild_adj_chunk(int wx, int wy, int wz);

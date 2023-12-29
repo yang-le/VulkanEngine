@@ -49,7 +49,6 @@ struct Mesh : gltf::Shader {
 int main(int argc, char* argv[]) {
     try {
         Engine engine(1600, 900);
-        engine.init();
 
         auto player = std::make_unique<Player>(engine, glm::radians(75.0f), 1600.0 / 900.0, 0.1, 1000);
         player->position = {-20, 180, 250};
@@ -57,8 +56,7 @@ int main(int argc, char* argv[]) {
         engine.set_player(std::move(player));
         engine.add_mesh(std::make_unique<Mesh>(engine, glm::scale(glm::mat4(1), glm::vec3(52))));
 
-        engine.loop();
-        engine.destroy();
+        engine.run();
     } catch (const std::exception& e) {
         std::cerr << e.what();
     } catch (...) {

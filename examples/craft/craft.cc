@@ -17,9 +17,9 @@ struct McScene : Scene {
         world->update();
         Scene::update();
     }
-    virtual void draw(uint32_t currentBuffer) override {
-        world->draw(currentBuffer);
-        Scene::draw(currentBuffer);
+    virtual void draw() override {
+        world->draw();
+        Scene::draw();
     }
 
     virtual void load() override { world->load(); }

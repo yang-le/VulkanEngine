@@ -280,14 +280,18 @@ Vulkan::~Vulkan() {
         destroySwapChain();
         vmaDestroyAllocator(vmaAllocator);
 
-        renderPassBuilder.destroy(device);
-        device.destroyRenderPass(renderPass);
+        for (auto& renderResource : renderResources) {
+            renderResource.renderPassBuilder.destroy(device);
+            device.destroyRenderPass(renderResource.renderPass);
+        }
+
         for (auto& drawResource : drawResources) {
             device.destroyPipeline(drawResource.graphicsPipeline);
             device.destroyPipelineLayout(drawResource.pipelineLayout);
             device.destroyDescriptorPool(drawResource.descriptorPool);
             device.destroyDescriptorSetLayout(drawResource.descriptorSetLayout);
         }
+
         device.freeCommandBuffers(commandPool, commandBuffer);
         device.destroyCommandPool(commandPool);
         device.destroy();
@@ -333,26 +337,31 @@ Vulkan& Vulkan::setDeviceFeatures(const vk::PhysicalDeviceFeatures& features) {
     return *this;
 }
 
-Vulkan& Vulkan::setRenderPassBuilder(const RenderPassBuilder& builder) {
-    renderPassBuilder = builder;
-    return *this;
-}
-
 void Vulkan::init(vk::Extent2D extent, std::function<vk::SurfaceKHR(const vk::Instance&)> getSurfaceKHR,
+                  const RenderPassBuilder& renderPassBuilder, uint32_t renderPassCount,
                   std::function<bool(const vk::PhysicalDevice&)> pickDevice) {
     initInstance();
     enumerateDevice(pickDevice);
     initDevice(getSurfaceKHR);
     initSwapChain(extent);
     initCommandBuffer();
-
-    if (renderPassBuilder.attachmentDescriptions.empty()) renderPassBuilder = makeRenderPassBuilder();
-    vk::Format surfaceFormat = pickSurfaceFormat(physicalDevice.getSurfaceFormatsKHR(surface)).format;
-    renderPass = renderPassBuilder.build(device, surfaceFormat);
-
-    initFrameBuffers();
     frame.init(device, commandPool);
+
+    renderResources.resize(renderPassCount);
+    addRenderPass(renderPassBuilder);
 };
+
+void Vulkan::addRenderPass(const RenderPassBuilder& builder, bool preserveContent, bool offscreen) {
+    ++renderIndex;
+    renderPassBuilder() = builder;
+
+    if (renderPassBuilder().attachmentDescriptions.empty())
+        renderPassBuilder() =
+            makeRenderPassBuilder({surfaceFormat.format, vk::Format::eD16Unorm}, preserveContent, offscreen);
+
+    renderPass() = renderPassBuilder().build(device);
+    initFrameBuffers();
+}
 
 uint32_t Vulkan::attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
                               const Buffer& vertex, const std::vector<vk::Format>& vertexFormats,
@@ -392,7 +401,7 @@ uint32_t Vulkan::attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderMod
     return drawId;
 }
 
-uint32_t Vulkan::renderBegin() {
+void Vulkan::renderBegin() {
     device.waitForFences(frame.drawFence(), vk::True, std::numeric_limits<uint64_t>::max());
 
     auto currentBuffer =
@@ -402,15 +411,17 @@ uint32_t Vulkan::renderBegin() {
     } else if (currentBuffer.result != vk::Result::eSuccess && currentBuffer.result != vk::Result::eSuboptimalKHR) {
         throw std::runtime_error("fail to acquire swap chain image!");
     }
-    assert(currentBuffer.value < framebuffers.size());
+
+    renderIndex = 0;
+    assert(currentBuffer.value < framebuffers().size());
 
     device.resetFences(frame.drawFence());
 
-    std::vector<vk::ClearValue> clearValues(renderPassBuilder.attachmentDescriptions.size(), vk::ClearColorValue{});
+    std::vector<vk::ClearValue> clearValues(renderPassBuilder().attachmentDescriptions.size(), vk::ClearColorValue{});
     clearValues.front().color = bgColor;
     clearValues.back().depthStencil = vk::ClearDepthStencilValue(1.0f, 0);
 
-    vk::RenderPassBeginInfo renderPassBeginInfo(renderPass, framebuffers[currentBuffer.value],
+    vk::RenderPassBeginInfo renderPassBeginInfo(renderPass(), framebuffers()[currentBuffer.value],
                                                 vk::Rect2D(vk::Offset2D(0, 0), imageExtent), clearValues);
 
     frame.commandBuffer().begin(vk::CommandBufferBeginInfo());
@@ -418,33 +429,33 @@ uint32_t Vulkan::renderBegin() {
     frame.commandBuffer().setViewport(0, vk::Viewport(0, 0, (float)imageExtent.width, (float)imageExtent.height, 0, 1));
     frame.commandBuffer().setScissor(0, vk::Rect2D({0, 0}, imageExtent));
 
-    return currentBuffer.value;
+    this->currentBuffer = currentBuffer.value;
 }
 
 void Vulkan::updateVertex(uint32_t i, const Buffer& vertex) { vertexBuffer(i) = vertex; }
 
-void Vulkan::draw(uint32_t currentBuffer, uint32_t i) {
+void Vulkan::draw(uint32_t i) {
     frame.commandBuffer().bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipeline(i));
     if (descriptorSet(i))
         frame.commandBuffer().bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout(i), 0,
                                                  descriptorSet(i), nullptr);
-    if (renderPassBuilder.descriptorSets[currentBuffer])
+    if (renderPassBuilder().descriptorSets[currentBuffer])
         frame.commandBuffer().bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout(i), 1,
-                                                 renderPassBuilder.descriptorSets[currentBuffer], nullptr);
+                                                 renderPassBuilder().descriptorSets[currentBuffer], nullptr);
     frame.commandBuffer().bindVertexBuffers(0, vertexBuffer(i).buffer, {0});
     frame.commandBuffer().draw((uint32_t)vertexBuffer(i).size / vertexBuffer(i).stride, 1, 0, 0);
 }
 
-void Vulkan::drawIndex(uint32_t currentBuffer, uint32_t i, const vk::Buffer& index, vk::DeviceSize indexOffset,
-                       vk::IndexType indexType, uint32_t count, const std::vector<vk::Buffer>& vertex,
-                       const std::vector<vk::DeviceSize>& vertexOffset) {
+void Vulkan::drawIndexed(uint32_t i, const vk::Buffer& index, vk::DeviceSize indexOffset, vk::IndexType indexType,
+                         uint32_t count, const std::vector<vk::Buffer>& vertex,
+                         const std::vector<vk::DeviceSize>& vertexOffset) {
     frame.commandBuffer().bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipeline(i));
     if (descriptorSet(i))
         frame.commandBuffer().bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout(i), 0,
                                                  descriptorSet(i), nullptr);
-    if (renderPassBuilder.descriptorSets[currentBuffer])
+    if (renderPassBuilder().descriptorSets[currentBuffer])
         frame.commandBuffer().bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout(i), 1,
-                                                 renderPassBuilder.descriptorSets[currentBuffer], nullptr);
+                                                 renderPassBuilder().descriptorSets[currentBuffer], nullptr);
     frame.commandBuffer().bindVertexBuffers(0, vertex, vertexOffset);
     frame.commandBuffer().bindIndexBuffer(index, indexOffset, indexType);
     frame.commandBuffer().pushConstants<uint32_t>(pipelineLayout(i), vk::ShaderStageFlagBits::eAll, 0, i);
@@ -453,7 +464,20 @@ void Vulkan::drawIndex(uint32_t currentBuffer, uint32_t i, const vk::Buffer& ind
 
 void Vulkan::nextSubpass() { frame.commandBuffer().nextSubpass(vk::SubpassContents::eInline); }
 
-void Vulkan::renderEnd(uint32_t currentBuffer) {
+void Vulkan::nextPass() {
+    std::vector<vk::ClearValue> clearValues(renderPassBuilder().attachmentDescriptions.size(), vk::ClearColorValue{});
+    clearValues.front().color = bgColor;
+    clearValues.back().depthStencil = vk::ClearDepthStencilValue(1.0f, 0);
+
+    ++renderIndex;
+    vk::RenderPassBeginInfo renderPassBeginInfo(renderPass(), framebuffers()[currentBuffer],
+                                                vk::Rect2D(vk::Offset2D(0, 0), imageExtent), clearValues);
+
+    frame.commandBuffer().endRenderPass();
+    frame.commandBuffer().beginRenderPass(renderPassBeginInfo, vk::SubpassContents::eInline);
+}
+
+void Vulkan::renderEnd() {
     frame.commandBuffer().endRenderPass();
     frame.commandBuffer().end();
 
@@ -473,9 +497,9 @@ void Vulkan::renderEnd(uint32_t currentBuffer) {
 }
 
 void Vulkan::render() {
-    auto currentBuffer = renderBegin();
-    for (unsigned i = 0; i < drawResources.size(); ++i) draw(currentBuffer, i);
-    renderEnd(currentBuffer);
+    renderBegin();
+    for (unsigned i = 0; i < drawResources.size(); ++i) draw(i);
+    renderEnd();
 }
 
 void Vulkan::resize(vk::Extent2D extent) {
@@ -483,10 +507,10 @@ void Vulkan::resize(vk::Extent2D extent) {
     destroySwapChain();
     initSwapChain(extent);
     initFrameBuffers();
-    renderPassBuilder.buildImages(*this);
+    renderPassBuilder().buildImages(*this);
 
-    device.freeDescriptorSets(renderPassBuilder.descriptorPool, renderPassBuilder.descriptorSets);
-    renderPassBuilder.buildDescriptorSets(device, swapChainImages.size());
+    device.freeDescriptorSets(renderPassBuilder().descriptorPool, renderPassBuilder().descriptorSets);
+    renderPassBuilder().buildDescriptorSets(device, swapChainImages.size());
 }
 
 Vulkan::Buffer Vulkan::createUniformBuffer(vk::DeviceSize size) {
@@ -752,7 +776,7 @@ void Vulkan::initCommandBuffer() {
 }
 
 void Vulkan::initSwapChain(vk::Extent2D extent) {
-    vk::SurfaceFormatKHR surfaceFormat = pickSurfaceFormat(physicalDevice.getSurfaceFormatsKHR(surface));
+    surfaceFormat = pickSurfaceFormat(physicalDevice.getSurfaceFormatsKHR(surface));
 
     auto surfaceCaps = physicalDevice.getSurfaceCapabilitiesKHR(surface);
 
@@ -783,9 +807,9 @@ void Vulkan::initSwapChain(vk::Extent2D extent) {
                            ? vk::PresentModeKHR::eMailbox
                            : vk::PresentModeKHR::eFifo;
 
-    imageCount = clamp(3u, surfaceCaps.minImageCount, surfaceCaps.maxImageCount);
+    minImageCount = clamp(3u, surfaceCaps.minImageCount, surfaceCaps.maxImageCount);
     vk::SwapchainCreateInfoKHR swapChainCreateInfo(
-        {}, surface, imageCount, surfaceFormat.format, surfaceFormat.colorSpace, imageExtent, 1,
+        {}, surface, minImageCount, surfaceFormat.format, surfaceFormat.colorSpace, imageExtent, 1,
         vk::ImageUsageFlagBits::eColorAttachment, vk::SharingMode::eExclusive, graphicsQueueFamliyIndex, preTransform,
         compositeAlpha, presentMode, true);
 
@@ -858,19 +882,19 @@ void Vulkan::initDescriptorSet(const std::map<int, Buffer>& uniforms, const std:
 }
 
 void Vulkan::initFrameBuffers() {
-    renderPassBuilder.buildImages(*this);
-    renderPassBuilder.buildDescriptor(device, swapChainImages.size());
+    renderPassBuilder().buildImages(*this);
+    renderPassBuilder().buildDescriptor(device, swapChainImages.size());
 
-    std::vector<vk::ImageView> attachments(renderPassBuilder.attachmentDescriptions.size());
-    vk::FramebufferCreateInfo framebufferCreateInfo({}, renderPass, attachments, imageExtent.width, imageExtent.height,
-                                                    1);
+    std::vector<vk::ImageView> attachments(renderPassBuilder().attachmentDescriptions.size());
+    vk::FramebufferCreateInfo framebufferCreateInfo({}, renderPass(), attachments, imageExtent.width,
+                                                    imageExtent.height, 1);
 
-    framebuffers.reserve(swapChainImageViews.size());
+    framebuffers().reserve(swapChainImageViews.size());
     for (unsigned j = 0; j < swapChainImageViews.size(); ++j) {
         attachments[0] = swapChainImageViews[j];
-        for (unsigned i = 0; i < renderPassBuilder.attachmentDescriptions.size() - 1; ++i)
-            attachments[1 + i] = renderPassBuilder.imageViews[j][i];
-        framebuffers.push_back(device.createFramebuffer(framebufferCreateInfo));
+        for (unsigned i = 0; i < renderPassBuilder().attachmentDescriptions.size() - 1; ++i)
+            attachments[1 + i] = renderPassBuilder().imageViews[j][i];
+        framebuffers().push_back(device.createFramebuffer(framebufferCreateInfo));
     }
 }
 
@@ -945,7 +969,7 @@ uint32_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const 
     vk::PipelineDynamicStateCreateInfo pipelineDynamicStateCreateInfo({}, dynamicStates);
 
     std::array<vk::DescriptorSetLayout, 2> descriptorSetLayouts = {descriptorSetLayout(),
-                                                                   renderPassBuilder.descriptorSetLayout};
+                                                                   renderPassBuilder().descriptorSetLayout};
     pipelineLayout() = device.createPipelineLayout({{},
                                                     descriptorSetLayouts.size(),
                                                     descriptorSetLayouts.data(),
@@ -956,7 +980,7 @@ uint32_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const 
         {}, pipelineShaderStageCreateInfos, &vertexInfo, &pipelineInputAssemblyStateCreateInfo, nullptr,
         &pipelineViewportStateCreateInfo, &pipelineRasterizationStateCreateInfo, &pipelineMultisampleStateCreateInfo,
         &pipelineDepthStencilStateCreateInfo, &pipelineColorBlendStateCreateInfo, &pipelineDynamicStateCreateInfo,
-        pipelineLayout(), renderPass, subpass);
+        pipelineLayout(), renderPass(), subpass);
 
     vk::Result result;
     std::tie(result, graphicsPipeline()) = device.createGraphicsPipeline(nullptr, graphicPipelineCreateInfo);
@@ -966,13 +990,15 @@ uint32_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const 
 }
 
 void Vulkan::destroySwapChain() {
-    for (auto const& framebuffer : framebuffers) device.destroyFramebuffer(framebuffer);
-    framebuffers.clear();
+    for (auto& renderResource : renderResources) {
+        for (auto const& framebuffer : renderResource.framebuffers) device.destroyFramebuffer(framebuffer);
+        renderResource.framebuffers.clear();
+        renderResource.renderPassBuilder.destroyImages(device, vmaAllocator);
+    }
+
     for (auto& swapChainImageView : swapChainImageViews) device.destroyImageView(swapChainImageView);
     swapChainImageViews.clear();
     device.destroySwapchainKHR(swapChain);
-
-    renderPassBuilder.destroyImages(device, vmaAllocator);
 }
 
 Vulkan::RenderPassBuilder& Vulkan::RenderPassBuilder::addSubpass(const std::initializer_list<uint32_t>& colors,
@@ -1124,9 +1150,7 @@ void Vulkan::RenderPassBuilder::destroyImages(const vk::Device& device, const Vm
     images.clear();
 }
 
-vk::RenderPass Vulkan::RenderPassBuilder::build(const vk::Device& device, const vk::Format& frameFormat) {
-    attachmentDescriptions.front().setFormat(frameFormat);
-
+vk::RenderPass Vulkan::RenderPassBuilder::build(const vk::Device& device) {
     if (subpassDescriptions.empty()) addSubpass({0});
 
     // This makes sure that writes to the depth image are done before we try to write to it again
@@ -1140,46 +1164,66 @@ vk::RenderPass Vulkan::RenderPassBuilder::build(const vk::Device& device, const 
                               vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::AccessFlagBits::eNone,
                               vk::AccessFlagBits::eColorAttachmentWrite);
 
+    if (offscreen)
+        dependencies.emplace_back(vk::SubpassExternal, 0, vk::PipelineStageFlagBits::eBottomOfPipe,
+                                  vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::AccessFlagBits::eMemoryRead,
+                                  vk::AccessFlagBits::eColorAttachmentWrite, vk::DependencyFlagBits::eByRegion);
+
     dependencies.emplace_back(subpassDescriptions.size() - 1, vk::SubpassExternal,
                               vk::PipelineStageFlagBits::eColorAttachmentOutput,
                               vk::PipelineStageFlagBits::eBottomOfPipe,
                               vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite,
                               vk::AccessFlagBits::eMemoryRead, vk::DependencyFlagBits::eByRegion);
+
     return device.createRenderPass({{}, attachmentDescriptions, subpassDescriptions, dependencies});
 }
 
-Vulkan::RenderPassBuilder Vulkan::makeRenderPassBuilder(const vk::ArrayProxy<vk::Format>& formats) {
-    std::vector<vk::AttachmentDescription> attachments;
-    attachments.reserve(formats.size());
-    for (auto& format : formats)
-        attachments.emplace_back(vk::AttachmentDescriptionFlags{}, format, vk::SampleCountFlagBits::e1,
-                                 vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eDontCare,
-                                 vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
-                                 vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal);
-    return makeRenderPassBuilder(attachments);
-}
-
-Vulkan::RenderPassBuilder Vulkan::makeRenderPassBuilder(const vk::ArrayProxy<vk::AttachmentDescription>& attachments) {
+Vulkan::RenderPassBuilder Vulkan::makeRenderPassBuilder(const vk::ArrayProxy<vk::Format>& formats, bool preserveContent,
+                                                        bool offscreen) {
     RenderPassBuilder builder;
+    builder.offscreen = offscreen;
 
     // The first attachment is always the framebuffer image
-    // and the last attachment is always the depth image
+    // and the last attachment is always the depth image (if suitable)
+
+    auto format = formats.begin();
 
     builder.attachmentDescriptions.emplace_back(
-        vk::AttachmentDescriptionFlags{}, vk::Format::eR8G8B8A8Unorm, vk::SampleCountFlagBits::e1,
-        vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore, vk::AttachmentLoadOp::eDontCare,
-        vk::AttachmentStoreOp::eDontCare, vk::ImageLayout::eUndefined, vk::ImageLayout::ePresentSrcKHR);
+        vk::AttachmentDescriptionFlags{}, *format++, vk::SampleCountFlagBits::e1,
+        preserveContent ? vk::AttachmentLoadOp::eLoad : vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore,
+        vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
+        preserveContent ? vk::ImageLayout::ePresentSrcKHR : vk::ImageLayout::eUndefined,
+        offscreen ? vk::ImageLayout::eShaderReadOnlyOptimal : vk::ImageLayout::ePresentSrcKHR);
+
+    while (format != formats.end())
+        builder.attachmentDescriptions.emplace_back(
+            vk::AttachmentDescriptionFlags{}, *format++, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eClear,
+            vk::AttachmentStoreOp::eDontCare, vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
+            vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal);
+
+    // check if last one is depth format
+    for (uint8_t i = 0; i < vk::componentCount(formats.back()); ++i)
+        if (*vk::componentName(formats.back(), i) == 'D') {
+            builder.attachmentDescriptions.back().setFinalLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal);
+            builder.depthReference = std::make_shared<vk::AttachmentReference>(
+                static_cast<uint32_t>(builder.attachmentDescriptions.size() - 1),
+                vk::ImageLayout::eDepthStencilAttachmentOptimal);
+            return builder;
+        }
+
+    builder.depthReference = nullptr;
+    return builder;
+}
+
+Vulkan::RenderPassBuilder Vulkan::makeRenderPassBuilder(const vk::ArrayProxy<vk::AttachmentDescription>& attachments,
+                                                        uint32_t depth) {
+    RenderPassBuilder builder;
 
     for (auto& attachment : attachments) builder.attachmentDescriptions.push_back(attachment);
 
-    builder.attachmentDescriptions.emplace_back(
-        vk::AttachmentDescriptionFlags{}, vk::Format::eD16Unorm, vk::SampleCountFlagBits::e1,
-        vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eDontCare, vk::AttachmentLoadOp::eDontCare,
-        vk::AttachmentStoreOp::eDontCare, vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthStencilAttachmentOptimal);
-
     builder.depthReference =
-        std::make_shared<vk::AttachmentReference>(static_cast<uint32_t>(builder.attachmentDescriptions.size() - 1),
-                                                  vk::ImageLayout::eDepthStencilAttachmentOptimal);
+        depth != -1 ? std::make_shared<vk::AttachmentReference>(depth, vk::ImageLayout::eDepthStencilAttachmentOptimal)
+                    : nullptr;
 
     return builder;
 }

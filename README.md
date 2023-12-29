@@ -6,6 +6,8 @@ This project is inspired by
     for the craft example and the whole framework
 - [Vulkan-Hpp](https://github.com/KhronosGroup/Vulkan-Hpp)
     for vulkan interface related codes
+- [Vulkan](https://github.com/SaschaWillems/Vulkan)
+    for subpasses and many other technics
 - [Vulkan-Samples](https://github.com/KhronosGroup/Vulkan-Samples)
     for mipmap generation on the fly and many other technics
 - [Vulkan-glTF-PBR](https://github.com/SaschaWillems/Vulkan-glTF-PBR)

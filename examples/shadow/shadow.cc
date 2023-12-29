@@ -85,8 +85,7 @@ int main(int argc, char* argv[]) {
             .dependOn(0);          // subpass 1 depends on subpass 0
 
     try {
-        Engine engine(1600, 900);
-        engine.init(renderPassBuilder);
+        Engine engine(1600, 900, renderPassBuilder);
 
         auto player = std::make_unique<Player>(engine, glm::radians(75.0f), 1600.0 / 900.0, 1e-2, 1000);
         player->position = {30, 30, 30};
@@ -111,8 +110,7 @@ int main(int argc, char* argv[]) {
         mesh->shaders[1] = std::move(secondPass);
         engine.add_mesh(std::move(mesh));
 
-        engine.loop();
-        engine.destroy();
+        engine.run();
     } catch (const std::exception& e) {
         std::cerr << e.what();
     } catch (...) {

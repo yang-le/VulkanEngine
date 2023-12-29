@@ -54,8 +54,8 @@ void World::attach(uint32_t subpass) {
     vulkan->destroyShaderModule(vert_shader);
 }
 
-void World::draw(uint32_t currentBuffer) {
+void World::draw() {
     for (auto& chunk : chunks)
-        if (!chunk->empty && chunk->is_on_frustum(camera)) chunk->draw(currentBuffer);
-    voxel_handler->draw(currentBuffer);
+        if (!chunk->empty && chunk->is_on_frustum(camera)) chunk->draw();
+    voxel_handler->draw();
 }

@@ -61,20 +61,20 @@ struct Model {
     void load(Node* parent, const tinygltf::Node& node);
     void load(const tinygltf::Mesh& mesh);
 
-    void draw(uint32_t currentBuffer, const Primitive& primitive) {
-        vulkan->drawIndex(currentBuffer, primitive.drawId, primitive.index, primitive.indexOffset, primitive.indexType,
-                          (uint32_t)primitive.indexCount, primitive.vertex, primitive.vertexOffset);
+    void draw(const Primitive& primitive) {
+        vulkan->drawIndexed(primitive.drawId, primitive.index, primitive.indexOffset, primitive.indexType,
+                            (uint32_t)primitive.indexCount, primitive.vertex, primitive.vertexOffset);
     }
-    void draw(uint32_t currentBuffer, const Mesh& mesh) {
-        for (auto& primitive : mesh.primitives) draw(currentBuffer, primitive);
+    void draw(const Mesh& mesh) {
+        for (auto& primitive : mesh.primitives) draw(primitive);
     }
-    void draw(uint32_t currentBuffer, const Node& node) {
-        if (node.mesh) draw(currentBuffer, *node.mesh);
-        for (auto& child : node.children) draw(currentBuffer, child);
+    void draw(const Node& node) {
+        if (node.mesh) draw(*node.mesh);
+        for (auto& child : node.children) draw(child);
     }
-    void draw(uint32_t currentBuffer, size_t i = -1) {
+    void draw(size_t i = -1) {
         if (i == -1) i = model.defaultScene > -1 ? model.defaultScene : 0;
-        for (auto j : model.scenes[i].nodes) draw(currentBuffer, nodes[j]);
+        for (auto j : model.scenes[i].nodes) draw(nodes[j]);
     }
 
     void attachShader(Primitive& primitive, vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
@@ -146,7 +146,7 @@ struct Shader : ::Shader {
         model.attachShader(vert_shader, frag_shader, vert_formats, uniforms, textures, subpass);
     }
 
-    virtual void draw(uint32_t currentBuffer) override { model.draw(currentBuffer); }
+    virtual void draw() override { model.draw(); }
 
     Model model;
 };

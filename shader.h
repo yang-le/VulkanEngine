@@ -37,7 +37,7 @@ struct IShader {
 
     virtual void init() = 0;
     virtual void update() = 0;
-    virtual void draw(uint32_t currentBuffer) = 0;
+    virtual void draw() = 0;
 
     virtual void load() = 0;
     virtual void attach(uint32_t subpass = 0) = 0;
@@ -50,8 +50,8 @@ struct Shader : IShader {
 
     virtual void init();
     virtual void update() { write_uniform(1, camera->view); }
-    virtual void draw(uint32_t currentBuffer) {
-        if (draw_id != -1) vulkan->draw(currentBuffer, draw_id);
+    virtual void draw() {
+        if (draw_id != -1) vulkan->draw(draw_id);
     }
 
     virtual void load();
@@ -117,8 +117,8 @@ struct MultiShader : IShader {
     virtual void load() override {
         for (auto &shader : shaders) shader->load();
     }
-    virtual void draw(uint32_t currentBuffer) override {
-        for (auto &shader : shaders) shader->draw(currentBuffer);
+    virtual void draw() override {
+        for (auto &shader : shaders) shader->draw();
     }
 
     Container shaders;
@@ -133,13 +133,13 @@ struct SubpassShader : MultiShader<N> {
         for (unsigned i = 0; i < N; ++i) this->shaders[i]->attach(i);
     }
 
-    virtual void draw(uint32_t currentBuffer) override {
+    virtual void draw() override {
         unsigned i;
         for (i = 0; i < N - 1; ++i) {
-            this->shaders[i]->draw(currentBuffer);
+            this->shaders[i]->draw();
             vulkan.nextSubpass();
         }
-        this->shaders[i]->draw(currentBuffer);
+        this->shaders[i]->draw();
     }
 
     Vulkan &vulkan;

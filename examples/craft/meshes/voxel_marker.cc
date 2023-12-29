@@ -62,8 +62,8 @@ void VoxelMarkerMesh::update() {
     write_uniform(3, interaction_mode);
 }
 
-void VoxelMarkerMesh::draw(uint32_t currentBuffer) {
-    if (voxel_id) Shader::draw(currentBuffer);
+void VoxelMarkerMesh::draw() {
+    if (voxel_id) Shader::draw();
 }
 
 void VoxelMarkerMesh::add_voxel() {

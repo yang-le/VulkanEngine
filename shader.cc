@@ -66,8 +66,8 @@ void Shader::load() {
 }
 
 void Shader::attach(uint32_t subpass) {
-    draw_id =
-        vulkan->attachShader(vert_shader, frag_shader, vertex, vert_formats, uniforms, textures, subpass, cull_mode);
+    draw_id = vulkan->attachShader(vert_shader, frag_shader, vertex.stride, vert_formats, uniforms, textures, subpass,
+                                   cull_mode);
 }
 
 void Shader::write_texture(int binding, const std::string& filename, uint32_t layers) {

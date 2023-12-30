@@ -74,18 +74,8 @@ struct Shadow : gltf::Shader {
 // Will back to try this using https://github.com/SaschaWillems/Vulkan/tree/master/examples/shadowmapping
 
 int main(int argc, char* argv[]) {
-    // we have 3 attachments in total:
-    // attachment 0: the framebuffer color
-    // attachment 1: the depth GBuffer, which format passed into the renderPassBuilder
-    // attachment 2: the framebuffer depth
-    auto renderPassBuilder =
-        Vulkan::makeRenderPassBuilder(vk::Format::eR32G32B32A32Sfloat)
-            .addSubpass({1})       // subpass 0, writes to depth attachment
-            .addSubpass({0}, {1})  // subpass 1, reads from depth attachment and writes to framebuffer
-            .dependOn(0);          // subpass 1 depends on subpass 0
-
     try {
-        Engine engine(1600, 900, renderPassBuilder);
+        Engine engine(1600, 900, 2);
 
         auto player = std::make_unique<Player>(engine, glm::radians(75.0f), 1600.0 / 900.0, 1e-2, 1000);
         player->position = {30, 30, 30};
@@ -105,7 +95,7 @@ int main(int argc, char* argv[]) {
         secondPass->shaders[1] = std::make_unique<PhongShadow>(engine, "marry.gltf", "marry", marryModel1);
         secondPass->shaders[2] = std::make_unique<PhongShadow>(engine, "marry.gltf", "marry", marryModel2);
 
-        auto mesh = std::make_unique<SubpassShader<2>>(engine.vulkan);
+        auto mesh = std::make_unique<MultiPassShader<2>>(engine.vulkan);
         mesh->shaders[0] = std::move(firstPass);
         mesh->shaders[1] = std::move(secondPass);
         engine.add_mesh(std::move(mesh));

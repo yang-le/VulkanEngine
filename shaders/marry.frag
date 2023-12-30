@@ -2,8 +2,6 @@
 
 #include "constants.h"
 
-layout(input_attachment_index = 0, set = 1, binding = 0) uniform subpassInput uShadowMap;
-
 layout(location = 0) in vec3 vFragPos;
 layout(location = 1) in vec3 vNormal;
 layout(location = 2) in vec2 vTextureCoord;
@@ -28,6 +26,7 @@ layout(binding = 9) uniform uTextureSample_t {
     int uTextureSample;
 };
 layout(binding = 10) uniform sampler2D uSampler;
+layout(binding = 11) uniform sampler2D uShadowMap;
 
 layout(location = 0) out vec4 fragColor;
 
@@ -36,8 +35,8 @@ float unpack(vec4 rgbaDepth) {
     return dot(rgbaDepth, bitShift);
 }
 
-float useShadowMap(subpassInput shadowMap, vec4 shadowCoord) {
-    float depth = unpack(subpassLoad(shadowMap));
+float useShadowMap(sampler2D shadowMap, vec4 shadowCoord) {
+    float depth = unpack(texture(shadowMap, shadowCoord.xy));
     return (shadowCoord.z > depth + EPS) ? exp(10.0 * (depth - shadowCoord.z)) : 1.0;
     // return (shadowCoord.z > depth + EPS) ? 0.0 : 1.0;
 }

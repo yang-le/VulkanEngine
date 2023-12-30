@@ -54,6 +54,7 @@ int main(int argc, char* argv[]) {
         engine.set_scene(std::make_unique<McScene>(engine));
         engine.add_mesh(std::make_unique<CloudMesh>(engine));
         engine.add_mesh(std::make_unique<WaterMesh>(engine));
+        engine.vulkan.addRenderPass();
 
         engine.run();
     } catch (const std::exception& e) {

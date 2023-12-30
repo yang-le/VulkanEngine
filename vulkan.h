@@ -81,12 +81,11 @@ class Vulkan {
     Vulkan& setDeviceFeatures(const vk::PhysicalDeviceFeatures& features);
 
     void init(vk::Extent2D extent, std::function<vk::SurfaceKHR(const vk::Instance&)> getSurfaceKHR,
-              const RenderPassBuilder& renderPassBuilder, uint32_t renderPassCount,
-              std::function<bool(const vk::PhysicalDevice&)> pickDevice = {});
+              uint32_t renderPassCount, std::function<bool(const vk::PhysicalDevice&)> pickDevice = {});
     void addRenderPass(const RenderPassBuilder& builder = {}, bool preserveContent = false, bool offscreen = false);
 
     uint32_t attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
-                          const Buffer& vertex, const std::vector<vk::Format>& vertexFormats,
+                          uint32_t vertexStride, const std::vector<vk::Format>& vertexFormats,
                           const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures,
                           uint32_t subpass, vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack,
                           bool autoDestroy = true);
@@ -96,15 +95,13 @@ class Vulkan {
                           vk::PrimitiveTopology primitiveTopology, uint32_t subpass,
                           vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack, bool autoDestroy = true);
     void renderBegin();
-    void updateVertex(uint32_t i, const Buffer& vertex);
-    void draw(uint32_t i);
+    void draw(uint32_t i, const Buffer& vertex);
     void drawIndexed(uint32_t i, const vk::Buffer& index, vk::DeviceSize indexOffset, vk::IndexType indexType,
                      uint32_t count, const std::vector<vk::Buffer>& vertex,
                      const std::vector<vk::DeviceSize>& vertexOffset);
     void nextSubpass();
     void nextPass();
     void renderEnd();
-    void render();
     void resize(vk::Extent2D extent);
 
     Buffer createUniformBuffer(vk::DeviceSize size);
@@ -193,7 +190,6 @@ class Vulkan {
     RenderPassBuilder& renderPassBuilder() { return renderResources[renderIndex].renderPassBuilder; }
 
     struct DrawResource {
-        Buffer vertexBuffer = {};
         vk::DescriptorSetLayout descriptorSetLayout = {};
         vk::DescriptorPool descriptorPool = {};
         vk::DescriptorSet descriptorSet = {};
@@ -202,7 +198,6 @@ class Vulkan {
     };
     std::vector<DrawResource> drawResources;
 
-    Buffer& vertexBuffer(size_t i = -1) { return drawResources[i == -1 ? drawResources.size() - 1 : i].vertexBuffer; }
     vk::DescriptorSetLayout& descriptorSetLayout(size_t i = -1) {
         return drawResources[i == -1 ? drawResources.size() - 1 : i].descriptorSetLayout;
     }

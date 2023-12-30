@@ -55,6 +55,7 @@ int main(int argc, char* argv[]) {
 
         engine.set_player(std::move(player));
         engine.add_mesh(std::make_unique<Mesh>(engine, glm::scale(glm::mat4(1), glm::vec3(52))));
+        engine.vulkan.addRenderPass();
 
         engine.run();
     } catch (const std::exception& e) {

@@ -13,8 +13,7 @@
 
 class Engine {
    public:
-    Engine(uint32_t width, uint32_t height, const Vulkan::RenderPassBuilder& builder = {},
-           uint32_t renderPassCount = 1);
+    Engine(uint32_t width, uint32_t height, uint32_t renderPassCount = 1);
     ~Engine();
 
     void run();

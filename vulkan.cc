@@ -338,8 +338,7 @@ Vulkan& Vulkan::setDeviceFeatures(const vk::PhysicalDeviceFeatures& features) {
 }
 
 void Vulkan::init(vk::Extent2D extent, std::function<vk::SurfaceKHR(const vk::Instance&)> getSurfaceKHR,
-                  const RenderPassBuilder& renderPassBuilder, uint32_t renderPassCount,
-                  std::function<bool(const vk::PhysicalDevice&)> pickDevice) {
+                  uint32_t renderPassCount, std::function<bool(const vk::PhysicalDevice&)> pickDevice) {
     initInstance();
     enumerateDevice(pickDevice);
     initDevice(getSurfaceKHR);
@@ -348,7 +347,6 @@ void Vulkan::init(vk::Extent2D extent, std::function<vk::SurfaceKHR(const vk::In
     frame.init(device, commandPool);
 
     renderResources.resize(renderPassCount);
-    addRenderPass(renderPassBuilder);
 };
 
 void Vulkan::addRenderPass(const RenderPassBuilder& builder, bool preserveContent, bool offscreen) {
@@ -360,19 +358,20 @@ void Vulkan::addRenderPass(const RenderPassBuilder& builder, bool preserveConten
             makeRenderPassBuilder({surfaceFormat.format, vk::Format::eD16Unorm}, preserveContent, offscreen);
 
     renderPass() = renderPassBuilder().build(device);
+    renderPassBuilder().buildDescriptor(device, swapChainImages.size());
+
     initFrameBuffers();
 }
 
 uint32_t Vulkan::attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
-                              const Buffer& vertex, const std::vector<vk::Format>& vertexFormats,
+                              uint32_t vertexStride, const std::vector<vk::Format>& vertexFormats,
                               const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures,
                               uint32_t subpass, vk::CullModeFlags cullMode, bool autoDestroy) {
     drawResources.push_back({});
-    vertexBuffer() = vertex;
 
     if (!uniforms.empty() || !textures.empty()) initDescriptorSet(uniforms, textures);
     uint32_t drawId =
-        initPipeline(vertexShaderModule, fragmentShaderModule, vertex.stride, vertexFormats, subpass, cullMode);
+        initPipeline(vertexShaderModule, fragmentShaderModule, vertexStride, vertexFormats, subpass, cullMode);
 
     if (autoDestroy) {
         destroyShaderModule(fragmentShaderModule);
@@ -432,9 +431,7 @@ void Vulkan::renderBegin() {
     this->currentBuffer = currentBuffer.value;
 }
 
-void Vulkan::updateVertex(uint32_t i, const Buffer& vertex) { vertexBuffer(i) = vertex; }
-
-void Vulkan::draw(uint32_t i) {
+void Vulkan::draw(uint32_t i, const Buffer& vertex) {
     frame.commandBuffer().bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipeline(i));
     if (descriptorSet(i))
         frame.commandBuffer().bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout(i), 0,
@@ -442,8 +439,8 @@ void Vulkan::draw(uint32_t i) {
     if (renderPassBuilder().descriptorSets[currentBuffer])
         frame.commandBuffer().bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout(i), 1,
                                                  renderPassBuilder().descriptorSets[currentBuffer], nullptr);
-    frame.commandBuffer().bindVertexBuffers(0, vertexBuffer(i).buffer, {0});
-    frame.commandBuffer().draw((uint32_t)vertexBuffer(i).size / vertexBuffer(i).stride, 1, 0, 0);
+    frame.commandBuffer().bindVertexBuffers(0, vertex.buffer, {0});
+    frame.commandBuffer().draw((uint32_t)vertex.size / vertex.stride, 1, 0, 0);
 }
 
 void Vulkan::drawIndexed(uint32_t i, const vk::Buffer& index, vk::DeviceSize indexOffset, vk::IndexType indexType,
@@ -496,21 +493,12 @@ void Vulkan::renderEnd() {
     frame.next();
 }
 
-void Vulkan::render() {
-    renderBegin();
-    for (unsigned i = 0; i < drawResources.size(); ++i) draw(i);
-    renderEnd();
-}
-
 void Vulkan::resize(vk::Extent2D extent) {
     device.waitIdle();
     destroySwapChain();
     initSwapChain(extent);
-    initFrameBuffers();
-    renderPassBuilder().buildImages(*this);
 
-    device.freeDescriptorSets(renderPassBuilder().descriptorPool, renderPassBuilder().descriptorSets);
-    renderPassBuilder().buildDescriptorSets(device, swapChainImages.size());
+    for (renderIndex = 0; renderIndex < renderResources.size(); ++renderIndex) initFrameBuffers();
 }
 
 Vulkan::Buffer Vulkan::createUniformBuffer(vk::DeviceSize size) {
@@ -883,7 +871,7 @@ void Vulkan::initDescriptorSet(const std::map<int, Buffer>& uniforms, const std:
 
 void Vulkan::initFrameBuffers() {
     renderPassBuilder().buildImages(*this);
-    renderPassBuilder().buildDescriptor(device, swapChainImages.size());
+    renderPassBuilder().buildDescriptorSets(device, swapChainImages.size());
 
     std::vector<vk::ImageView> attachments(renderPassBuilder().attachmentDescriptions.size());
     vk::FramebufferCreateInfo framebufferCreateInfo({}, renderPass(), attachments, imageExtent.width,
@@ -993,6 +981,8 @@ void Vulkan::destroySwapChain() {
     for (auto& renderResource : renderResources) {
         for (auto const& framebuffer : renderResource.framebuffers) device.destroyFramebuffer(framebuffer);
         renderResource.framebuffers.clear();
+        device.freeDescriptorSets(renderResource.renderPassBuilder.descriptorPool,
+                                  renderResource.renderPassBuilder.descriptorSets);
         renderResource.renderPassBuilder.destroyImages(device, vmaAllocator);
     }
 
@@ -1109,7 +1099,6 @@ void Vulkan::RenderPassBuilder::buildDescriptor(const vk::Device& device, size_t
         descriptorSetLayoutBindings.emplace_back(i, vk::DescriptorType::eInputAttachment, 1,
                                                  vk::ShaderStageFlagBits::eFragment);
     descriptorSetLayout = device.createDescriptorSetLayout({{}, descriptorSetLayoutBindings});
-    buildDescriptorSets(device, swapChainImageCount);
 }
 
 void Vulkan::RenderPassBuilder::buildDescriptorSets(const vk::Device& device, size_t swapChainImageCount) {
@@ -1135,7 +1124,6 @@ void Vulkan::RenderPassBuilder::buildDescriptorSets(const vk::Device& device, si
 }
 
 void Vulkan::RenderPassBuilder::destroy(const vk::Device& device) {
-    device.freeDescriptorSets(descriptorPool, descriptorSets);
     device.destroyDescriptorPool(descriptorPool);
     device.destroyDescriptorSetLayout(descriptorSetLayout);
 }

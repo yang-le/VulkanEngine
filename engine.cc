@@ -6,8 +6,7 @@
 
 #include <iostream>
 
-Engine::Engine(uint32_t width, uint32_t height, const Vulkan::RenderPassBuilder& builder, uint32_t renderPassCount)
-    : width(width), height(height) {
+Engine::Engine(uint32_t width, uint32_t height, uint32_t renderPassCount) : width(width), height(height) {
     start_time = std::chrono::system_clock::now();
     glfwInit();
 
@@ -26,7 +25,7 @@ Engine::Engine(uint32_t width, uint32_t height, const Vulkan::RenderPassBuilder&
             glfwCreateWindowSurface(instance, window, nullptr, &surfaceKHR);
             return surfaceKHR;
         },
-        builder, renderPassCount + 1);
+        renderPassCount + 1);
 
     glfwSetWindowUserPointer(window, this);
     glfwSetMouseButtonCallback(window, [](GLFWwindow* window, int button, int action, int mods) {
@@ -90,10 +89,25 @@ Engine::Engine(uint32_t width, uint32_t height, const Vulkan::RenderPassBuilder&
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO();
+    ImGui_ImplGlfw_InitForVulkan(window, true);
+
+    add_gui(std::make_unique<EngineGui>(*this));
+}
+
+Engine::~Engine() {
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+
+    vulkan.device.destroyDescriptorPool(imgui_pool);
+
+    glfwDestroyWindow(window);
+    glfwTerminate();
+}
+
+void Engine::run() {
+    scene->init();
 
     // Setup Platform/Renderer backends
-    ImGui_ImplGlfw_InitForVulkan(window, true);
     ImGui_ImplVulkan_InitInfo init_info = {};
     init_info.Instance = vulkan.instance;
     init_info.PhysicalDevice = vulkan.physicalDevice;
@@ -107,27 +121,13 @@ Engine::Engine(uint32_t width, uint32_t height, const Vulkan::RenderPassBuilder&
     vulkan.addRenderPass({}, true);
     ImGui_ImplVulkan_Init(&init_info, vulkan.renderPass());
 
-    add_gui(std::make_unique<EngineGui>(*this));
-}
-
-Engine::~Engine() {
-    ImGui_ImplVulkan_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
-
-    vulkan.device.destroyDescriptorPool(imgui_pool);
-
-    glfwDestroyWindow(window);
-    glfwTerminate();
-}
-
-void Engine::run() {
-    scene->init();
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
         render();
     }
+
     vulkan.device.waitIdle();
+    ImGui_ImplVulkan_Shutdown();
 }
 
 void Engine::render() {

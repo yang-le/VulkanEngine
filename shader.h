@@ -51,7 +51,7 @@ struct Shader : IShader {
     virtual void init();
     virtual void update() { write_uniform(1, camera->view); }
     virtual void draw() {
-        if (draw_id != -1) vulkan->draw(draw_id);
+        if (draw_id != -1) vulkan->draw(draw_id, vertex);
     }
 
     virtual void load();
@@ -70,14 +70,12 @@ struct Shader : IShader {
     void write_vertex(const std::array<T, Size> &data) {
         if (vertex.data) vulkan->destroyVertexBuffer(vertex);
         vertex = vulkan->createVertexBuffer(data.data(), sizeof(T), Size);
-        if (draw_id != -1) vulkan->updateVertex(draw_id, vertex);
     }
 
     template <typename T>
     void write_vertex(const std::vector<T> &data) {
         if (vertex.data) vulkan->destroyVertexBuffer(vertex);
         vertex = vulkan->createVertexBuffer(data.data(), sizeof(T), data.size());
-        if (draw_id != -1) vulkan->updateVertex(draw_id, vertex);
     }
 
     void write_texture(int binding, const std::string &filename, uint32_t layers = 1);
@@ -125,8 +123,8 @@ struct MultiShader : IShader {
 };
 
 template <size_t N>
-struct SubpassShader : MultiShader<N> {
-    SubpassShader(Vulkan &vulkan) : vulkan(vulkan) {}
+struct MultiSubpassShader : MultiShader<N> {
+    MultiSubpassShader(Vulkan &vulkan) : vulkan(vulkan) {}
 
     virtual void attach(uint32_t) override {
         // this is the only way to attach the subpass shaders
@@ -138,6 +136,32 @@ struct SubpassShader : MultiShader<N> {
         for (i = 0; i < N - 1; ++i) {
             this->shaders[i]->draw();
             vulkan.nextSubpass();
+        }
+        this->shaders[i]->draw();
+    }
+
+    Vulkan &vulkan;
+};
+
+template <size_t N>
+struct MultiPassShader : MultiShader<N> {
+    MultiPassShader(Vulkan &vulkan) : vulkan(vulkan) {}
+
+    virtual void attach(uint32_t) override {
+        unsigned i;
+        for (i = 0; i < N - 1; ++i) {
+            vulkan.addRenderPass({}, false, true);
+            this->shaders[i]->attach();
+        }
+        vulkan.addRenderPass();
+        this->shaders[i]->attach();
+    }
+
+    virtual void draw() override {
+        unsigned i;
+        for (i = 0; i < N - 1; ++i) {
+            this->shaders[i]->draw();
+            vulkan.nextPass();
         }
         this->shaders[i]->draw();
     }

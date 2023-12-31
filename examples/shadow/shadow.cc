@@ -70,8 +70,34 @@ struct Shadow : gltf::Shader {
     }
 };
 
-// TODO: It's not suitable for this shadow example to use a 2-subpass render
-// Will back to try this using https://github.com/SaschaWillems/Vulkan/tree/master/examples/shadowmapping
+template <size_t N>
+struct Shadows : MultiShader<N> {
+    Shadows(Engine& engine) : engine(engine) {}
+    virtual void pre_attach() override {
+        engine.vulkan.addRenderPass(
+            engine.vulkan.makeRenderPassBuilder({vk::Format::eR32G32B32A32Sfloat}, false, true));
+    }
+
+    Engine& engine;
+};
+
+template <size_t N>
+struct PhongShadows : MultiShader<N> {
+    PhongShadows(Engine& engine) : engine(engine) {}
+
+    virtual ~PhongShadows() override {
+        // erase texture to avoid double free
+        for (auto& shader : this->shaders) static_cast<PhongShadow&>(*shader).textures.erase(11);
+    }
+
+    virtual void pre_attach() override {
+        for (auto& shader : this->shaders)
+            static_cast<PhongShadow&>(*shader).textures[11] = engine.get_offscreen_color_texture();
+        engine.vulkan.addRenderPass();
+    }
+
+    Engine& engine;
+};
 
 int main(int argc, char* argv[]) {
     try {
@@ -85,12 +111,12 @@ int main(int argc, char* argv[]) {
         auto marryModel1 = glm::scale(glm::mat4(1), glm::vec3(20));
         auto marryModel2 = glm::scale(glm::translate(glm::mat4(1), glm::vec3(40, 0, -40)), glm::vec3(10));
 
-        auto firstPass = std::make_unique<MultiShader<3>>();
+        auto firstPass = std::make_unique<Shadows<3>>(engine);
         firstPass->shaders[0] = std::make_unique<Shadow>(engine, "floor.gltf", floorModel);
         firstPass->shaders[1] = std::make_unique<Shadow>(engine, "marry.gltf", marryModel1);
         firstPass->shaders[2] = std::make_unique<Shadow>(engine, "marry.gltf", marryModel2);
 
-        auto secondPass = std::make_unique<MultiShader<3>>();
+        auto secondPass = std::make_unique<PhongShadows<3>>(engine);
         secondPass->shaders[0] = std::make_unique<PhongShadow>(engine, "floor.gltf", "floor", floorModel, false);
         secondPass->shaders[1] = std::make_unique<PhongShadow>(engine, "marry.gltf", "marry", marryModel1);
         secondPass->shaders[2] = std::make_unique<PhongShadow>(engine, "marry.gltf", "marry", marryModel2);

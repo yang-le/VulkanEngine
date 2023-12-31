@@ -41,6 +41,9 @@ struct IShader {
 
     virtual void load() = 0;
     virtual void attach(uint32_t subpass = 0) = 0;
+
+    virtual void pre_attach(){};
+    // virtual void post_draw(){};
 };
 
 struct Shader : IShader {
@@ -148,13 +151,10 @@ struct MultiPassShader : MultiShader<N> {
     MultiPassShader(Vulkan &vulkan) : vulkan(vulkan) {}
 
     virtual void attach(uint32_t) override {
-        unsigned i;
-        for (i = 0; i < N - 1; ++i) {
-            vulkan.addRenderPass({}, false, true);
-            this->shaders[i]->attach();
+        for (auto &shader : this->shaders) {
+            shader->pre_attach();
+            shader->attach();
         }
-        vulkan.addRenderPass();
-        this->shaders[i]->attach();
     }
 
     virtual void draw() override {

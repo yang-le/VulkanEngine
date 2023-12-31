@@ -51,7 +51,10 @@ class Vulkan {
         void destroy(const vk::Device& device);
         void destroyImages(const vk::Device& device, const VmaAllocator& vmaAllocator);
 
-        bool offscreen;
+        bool offscreenColor;
+        bool offscreenDepth;
+        std::shared_ptr<Texture> offscreenColorTexture;
+        std::shared_ptr<Texture> offscreenDepthTexture;
 
         std::shared_ptr<vk::AttachmentReference> depthReference;
         std::vector<vk::AttachmentDescription> attachmentDescriptions;
@@ -82,7 +85,7 @@ class Vulkan {
 
     void init(vk::Extent2D extent, std::function<vk::SurfaceKHR(const vk::Instance&)> getSurfaceKHR,
               uint32_t renderPassCount, std::function<bool(const vk::PhysicalDevice&)> pickDevice = {});
-    void addRenderPass(const RenderPassBuilder& builder = {}, bool preserveContent = false, bool offscreen = false);
+    void addRenderPass(const RenderPassBuilder& builder = {});
 
     uint32_t attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
                           uint32_t vertexStride, const std::vector<vk::Format>& vertexFormats,
@@ -124,7 +127,8 @@ class Vulkan {
     void destroyShaderModule(const vk::ShaderModule& shader);
 
     static RenderPassBuilder makeRenderPassBuilder(const vk::ArrayProxy<vk::Format>& formats,
-                                                   bool preserveContent = false, bool offscreen = false);
+                                                   bool preserveContent = false, bool offscreenColor = false,
+                                                   bool offscreenDepth = false);
     static RenderPassBuilder makeRenderPassBuilder(const vk::ArrayProxy<vk::AttachmentDescription>& attachments,
                                                    uint32_t depth = -1);
 

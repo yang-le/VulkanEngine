@@ -118,7 +118,7 @@ void Engine::run() {
     init_info.MinImageCount = vulkan.minImageCount;
     init_info.ImageCount = vulkan.minImageCount;
 
-    vulkan.addRenderPass({}, true);
+    vulkan.addRenderPass(vulkan.makeRenderPassBuilder({vulkan.surfaceFormat.format, vk::Format::eD16Unorm}, true));
     ImGui_ImplVulkan_Init(&init_info, vulkan.renderPass());
 
     while (!glfwWindowShouldClose(window)) {

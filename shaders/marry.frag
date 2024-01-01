@@ -36,7 +36,7 @@ float unpack(vec4 rgbaDepth) {
 }
 
 float useShadowMap(sampler2D shadowMap, vec4 shadowCoord) {
-    float depth = unpack(texture(shadowMap, shadowCoord.xy));
+    float depth = unpack(texture(shadowMap, shadowCoord.st));
     // return (shadowCoord.z > depth + EPS) ? exp(10.0 * (depth - shadowCoord.z)) : 1.0;
     return (shadowCoord.z > depth + EPS) ? 0.0 : 1.0;
 }
@@ -45,9 +45,7 @@ float useShadowMap(sampler2D shadowMap, vec4 shadowCoord) {
 
 void main(void) {
     float visibility;
-    vec3 shadowCoord = vPositionFromLight.xyz / vPositionFromLight.w;
-    shadowCoord.xy = (shadowCoord.xy + 1.0) / 2.0;  // convert position to uv
-    visibility = useShadowMap(uShadowMap, vec4(shadowCoord, 1.0));
+    visibility = useShadowMap(uShadowMap, vPositionFromLight / vPositionFromLight.w);
 
     vec3 color;
     if(uTextureSample == 1) {

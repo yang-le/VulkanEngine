@@ -6,20 +6,23 @@
 
 #include <iostream>
 
-Engine::Engine(uint32_t width, uint32_t height, uint32_t renderPassCount) : width(width), height(height) {
+Engine::Engine(int width, int height, uint32_t renderPassCount) : width(width), height(height) {
     start_time = std::chrono::system_clock::now();
     glfwInit();
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     window = glfwCreateWindow(width, height, "VulkanEngine", nullptr, nullptr);
+    glfwGetWindowPos(window, &xpos, &ypos);
 
     uint32_t count;
     const char** extensions = glfwGetRequiredInstanceExtensions(&count);
     if (!extensions) throw std::runtime_error("GLFW cannot create Vulkan window surfaces!");
-
     vulkan.setInstanceExtensions({count, extensions});
+
+    int fb_width, fb_height;
+    glfwGetFramebufferSize(window, &fb_width, &fb_height);
     vulkan.init(
-        {width, height},
+        {(uint32_t)fb_width, (uint32_t)fb_height},
         [this](const vk::Instance& instance) {
             VkSurfaceKHR surfaceKHR = VK_NULL_HANDLE;
             glfwCreateWindowSurface(instance, window, nullptr, &surfaceKHR);
@@ -121,7 +124,8 @@ void Engine::run() {
     vulkan.addRenderPass(vulkan.makeRenderPassBuilder({vulkan.surfaceFormat.format, vk::Format::eD16Unorm}, true));
     ImGui_ImplVulkan_Init(&init_info, vulkan.renderPass());
 
-    while (!glfwWindowShouldClose(window)) {
+    running = true;
+    while (!glfwWindowShouldClose(window) && running) {
         glfwPollEvents();
         render();
     }
@@ -164,17 +168,32 @@ void Engine::render() {
         vulkan.renderEnd();
     } catch (const std::runtime_error& e) {
         if (!strcmp(e.what(), "resize")) {
-            int width = 0, height = 0;
-            glfwGetFramebufferSize(window, &width, &height);
-            while (width == 0 || height == 0) {
-                glfwGetFramebufferSize(window, &width, &height);
+            int fb_width, fb_height;
+            glfwGetFramebufferSize(window, &fb_width, &fb_height);
+            while (fb_width == 0 || fb_height == 0) {
+                glfwGetFramebufferSize(window, &fb_width, &fb_height);
                 glfwWaitEvents();
             }
-            vulkan.resize({(uint32_t)width, (uint32_t)height});
+
+            glfwGetWindowSize(window, &width, &height);
+            glfwGetWindowPos(window, &xpos, &ypos);
+
+            if (quit_on_resize) {
+                running = false;
+                quit_reason = WINDOW_RESIZE;
+            } else {
+                vulkan.resize({(uint32_t)fb_width, (uint32_t)fb_height});
+            }
         } else {
             throw;
         }
     };
+}
+
+void Engine::set_window_pos(int xpos, int ypos) {
+    this->xpos = xpos;
+    this->ypos = ypos;
+    glfwSetWindowPos(window, xpos, ypos);
 }
 
 void Engine::EngineGui::gui_draw() {

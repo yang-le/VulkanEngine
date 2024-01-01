@@ -574,9 +574,9 @@ Vulkan::Texture Vulkan::createTexture(vk::Extent2D extent, const void* data, uin
                                       vk::Filter mag, vk::Filter min, vk::SamplerAddressMode modeU,
                                       vk::SamplerAddressMode modeV, vk::SamplerAddressMode modeW) {
     Texture texture;
+    texture.format = vk::Format::eR8G8B8A8Unorm;
 
-    vk::Format format = vk::Format::eR8G8B8A8Unorm;
-    vk::FormatProperties formatProps = physicalDevice.getFormatProperties(format);
+    vk::FormatProperties formatProps = physicalDevice.getFormatProperties(texture.format);
     uint32_t mipLevels = (uint32_t)std::log2(std::max(extent.width, extent.height)) + 1;
 
     bool needStaging = !(formatProps.linearTilingFeatures & vk::FormatFeatureFlagBits::eSampledImage) || (layers > 1);
@@ -591,7 +591,7 @@ Vulkan::Texture Vulkan::createTexture(vk::Extent2D extent, const void* data, uin
     }
 
     std::tie(texture.image, texture.memory) = createImage(
-        vmaAllocator, extent, format, needStaging ? vk::ImageTiling::eOptimal : vk::ImageTiling::eLinear,
+        vmaAllocator, extent, texture.format, needStaging ? vk::ImageTiling::eOptimal : vk::ImageTiling::eLinear,
         vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eTransferSrc,
         needStaging ? vk::ImageLayout::eUndefined : vk::ImageLayout::ePreinitialized, mipLevels, layers);
 
@@ -607,16 +607,16 @@ Vulkan::Texture Vulkan::createTexture(vk::Extent2D extent, const void* data, uin
 
     commandBuffer.begin(vk::CommandBufferBeginInfo());
     if (needStaging) {
-        setImageLayout(commandBuffer, texture.image, format, vk::ImageLayout::eUndefined,
+        setImageLayout(commandBuffer, texture.image, texture.format, vk::ImageLayout::eUndefined,
                        vk::ImageLayout::eTransferDstOptimal, 0, layers);
         vk::BufferImageCopy copyRegion(0, extent.width, extent.height, {vk::ImageAspectFlagBits::eColor, 0, 0, layers},
                                        vk::Offset3D(0, 0, 0), vk::Extent3D(extent, 1));
         commandBuffer.copyBufferToImage(texture.stagingBuffer, texture.image, vk::ImageLayout::eTransferDstOptimal,
                                         copyRegion);
-        setImageLayout(commandBuffer, texture.image, format, vk::ImageLayout::eTransferDstOptimal,
+        setImageLayout(commandBuffer, texture.image, texture.format, vk::ImageLayout::eTransferDstOptimal,
                        vk::ImageLayout::eTransferSrcOptimal, 0, layers);
     } else {
-        setImageLayout(commandBuffer, texture.image, format, vk::ImageLayout::ePreinitialized,
+        setImageLayout(commandBuffer, texture.image, texture.format, vk::ImageLayout::ePreinitialized,
                        vk::ImageLayout::eTransferSrcOptimal, 0, layers);
     }
     for (uint32_t i = 1; i < mipLevels; ++i) {
@@ -624,15 +624,15 @@ Vulkan::Texture Vulkan::createTexture(vk::Extent2D extent, const void* data, uin
                                 {{{}, {int32_t(extent.width >> (i - 1)), int32_t(extent.height >> (i - 1)), 1}}},
                                 {vk::ImageAspectFlagBits::eColor, i, 0, layers},
                                 {{{}, {int32_t(extent.width >> i), int32_t(extent.height >> i), 1}}});
-        setImageLayout(commandBuffer, texture.image, format,
+        setImageLayout(commandBuffer, texture.image, texture.format,
                        needStaging ? vk::ImageLayout::eUndefined : vk::ImageLayout::ePreinitialized,
                        vk::ImageLayout::eTransferDstOptimal, i, layers);
         commandBuffer.blitImage(texture.image, vk::ImageLayout::eTransferSrcOptimal, texture.image,
                                 vk::ImageLayout::eTransferDstOptimal, imageBlit, vk::Filter::eLinear);
-        setImageLayout(commandBuffer, texture.image, format, vk::ImageLayout::eTransferDstOptimal,
+        setImageLayout(commandBuffer, texture.image, texture.format, vk::ImageLayout::eTransferDstOptimal,
                        vk::ImageLayout::eTransferSrcOptimal, i, layers);
     }
-    setImageLayout(commandBuffer, texture.image, format, vk::ImageLayout::eTransferSrcOptimal,
+    setImageLayout(commandBuffer, texture.image, texture.format, vk::ImageLayout::eTransferSrcOptimal,
                    vk::ImageLayout::eShaderReadOnlyOptimal, 0, layers, mipLevels);
     commandBuffer.end();
 
@@ -647,9 +647,9 @@ Vulkan::Texture Vulkan::createTexture(vk::Extent2D extent, const void* data, uin
                                             vk::BorderColor::eFloatOpaqueBlack);
     texture.sampler = device.createSampler(samplerCreateInfo);
 
-    vk::ImageViewCreateInfo imageViewCreateInfo({}, texture.image,
-                                                layers == 1 ? vk::ImageViewType::e2D : vk::ImageViewType::e2DArray,
-                                                format, {}, {vk::ImageAspectFlagBits::eColor, 0, mipLevels, 0, layers});
+    vk::ImageViewCreateInfo imageViewCreateInfo(
+        {}, texture.image, layers == 1 ? vk::ImageViewType::e2D : vk::ImageViewType::e2DArray, texture.format, {},
+        {vk::ImageAspectFlagBits::eColor, 0, mipLevels, 0, layers});
     texture.view = device.createImageView(imageViewCreateInfo);
 
     return texture;
@@ -869,7 +869,9 @@ void Vulkan::initDescriptorSet(const std::map<int, Buffer>& uniforms, const std:
     }
     for (const auto& texture : textures) {
         descriptorImageInfo.emplace_back(texture.second.sampler, texture.second.view,
-                                         vk::ImageLayout::eShaderReadOnlyOptimal);
+                                         isDepthFormat(texture.second.format)
+                                             ? vk::ImageLayout::eDepthStencilReadOnlyOptimal
+                                             : vk::ImageLayout::eShaderReadOnlyOptimal);
         writeDescriptorSet.emplace_back(descriptorSet(), texture.first, 0, 1, vk::DescriptorType::eCombinedImageSampler,
                                         &descriptorImageInfo.back());
     }
@@ -892,7 +894,7 @@ void Vulkan::initFrameBuffers() {
             attachments[1 + i] = renderPassBuilder().imageViews[j][i];
 
         if (renderPassBuilder().offscreenColor) attachments.front() = renderPassBuilder().offscreenColorTexture->view;
-        if (renderPassBuilder().offscreenDepth) attachments.back() = RenderPassBuilder().offscreenDepthTexture->view;
+        if (renderPassBuilder().offscreenDepth) attachments.back() = renderPassBuilder().offscreenDepthTexture->view;
         framebuffers().push_back(device.createFramebuffer(framebufferCreateInfo));
     }
 }
@@ -1114,13 +1116,14 @@ void Vulkan::RenderPassBuilder::buildImages(Vulkan& vulkan) {
         }
 
         offscreenColorTexture = std::make_shared<Texture>();
+        offscreenColorTexture->format = attachmentDescriptions.front().format;
         std::tie(offscreenColorTexture->image, offscreenColorTexture->memory) =
-            createImage(vulkan.vmaAllocator, vulkan.imageExtent, attachmentDescriptions.front().format, tiling,
+            createImage(vulkan.vmaAllocator, vulkan.imageExtent, offscreenColorTexture->format, tiling,
                         vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled);
         offscreenColorTexture->view = vulkan.device.createImageView({{},
                                                                      offscreenColorTexture->image,
                                                                      vk::ImageViewType::e2D,
-                                                                     attachmentDescriptions.front().format,
+                                                                     offscreenColorTexture->format,
                                                                      {},
                                                                      {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}});
         offscreenColorTexture->sampler = vulkan.device.createSampler({});
@@ -1139,13 +1142,14 @@ void Vulkan::RenderPassBuilder::buildImages(Vulkan& vulkan) {
         }
 
         offscreenDepthTexture = std::make_shared<Texture>();
+        offscreenDepthTexture->format = attachmentDescriptions.back().format;
         std::tie(offscreenDepthTexture->image, offscreenDepthTexture->memory) =
-            createImage(vulkan.vmaAllocator, vulkan.imageExtent, attachmentDescriptions.back().format, tiling,
+            createImage(vulkan.vmaAllocator, vulkan.imageExtent, offscreenDepthTexture->format, tiling,
                         vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eSampled);
         offscreenDepthTexture->view = vulkan.device.createImageView({{},
                                                                      offscreenDepthTexture->image,
                                                                      vk::ImageViewType::e2D,
-                                                                     attachmentDescriptions.back().format,
+                                                                     offscreenDepthTexture->format,
                                                                      {},
                                                                      {vk::ImageAspectFlagBits::eDepth, 0, 1, 0, 1}});
         offscreenDepthTexture->sampler = vulkan.device.createSampler({});
@@ -1168,16 +1172,16 @@ void Vulkan::RenderPassBuilder::buildDescriptor(const vk::Device& device, size_t
         descriptorSetLayoutBindings.emplace_back(i, vk::DescriptorType::eInputAttachment, 1,
                                                  vk::ShaderStageFlagBits::eFragment);
     descriptorSetLayout = device.createDescriptorSetLayout({{}, descriptorSetLayoutBindings});
-}
-
-void Vulkan::RenderPassBuilder::buildDescriptorSets(const vk::Device& device, size_t swapChainImageCount) {
-    uint32_t descriptorCount = swapChainImageCount * (attachmentDescriptions.size() - 1);
-    if (!descriptorCount) return;
 
     std::vector<vk::DescriptorSetLayout> setLayouts(swapChainImageCount, descriptorSetLayout);
 
     vk::DescriptorSetAllocateInfo descriptorSetAllocateInfo(descriptorPool, setLayouts);
     descriptorSets = device.allocateDescriptorSets(descriptorSetAllocateInfo);
+}
+
+void Vulkan::RenderPassBuilder::buildDescriptorSets(const vk::Device& device, size_t swapChainImageCount) {
+    uint32_t descriptorCount = swapChainImageCount * (attachmentDescriptions.size() - 1);
+    if (!descriptorCount) return;
 
     std::vector<vk::DescriptorImageInfo> descriptorImageInfo;
     descriptorImageInfo.reserve(descriptorCount);
@@ -1281,6 +1285,7 @@ Vulkan::RenderPassBuilder Vulkan::makeRenderPassBuilder(const vk::ArrayProxy<vk:
 
     if (isDepthFormat(formats.back())) {
         builder.attachmentDescriptions.back().setFinalLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal);
+        if (offscreenDepth) builder.attachmentDescriptions.back().setStoreOp(vk::AttachmentStoreOp::eStore);
         builder.depthReference =
             std::make_shared<vk::AttachmentReference>(static_cast<uint32_t>(builder.attachmentDescriptions.size() - 1),
                                                       offscreenDepth ? vk::ImageLayout::eDepthStencilReadOnlyOptimal
@@ -1295,6 +1300,8 @@ Vulkan::RenderPassBuilder Vulkan::makeRenderPassBuilder(const vk::ArrayProxy<vk:
 Vulkan::RenderPassBuilder Vulkan::makeRenderPassBuilder(const vk::ArrayProxy<vk::AttachmentDescription>& attachments,
                                                         uint32_t depth) {
     RenderPassBuilder builder;
+    builder.offscreenDepth = false;
+    builder.offscreenColor = false;
 
     for (auto& attachment : attachments) builder.attachmentDescriptions.push_back(attachment);
 

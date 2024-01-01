@@ -74,8 +74,16 @@ template <size_t N>
 struct Shadows : MultiShader<N> {
     Shadows(Engine& engine) : engine(engine) {}
     virtual void pre_attach() override {
-        engine.vulkan.addRenderPass(
-            engine.vulkan.makeRenderPassBuilder({vk::Format::eR32G32B32A32Sfloat}, false, true));
+        vk::AttachmentDescription depthAttachment(
+            {}, vk::Format::eD16Unorm, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eClear,
+            vk::AttachmentStoreOp::eStore, vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
+            vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthStencilReadOnlyOptimal);
+        auto renderPassBuilder = engine.vulkan.makeRenderPassBuilder(depthAttachment, 0).addSubpass();
+        renderPassBuilder.offscreenDepth = true;
+        engine.vulkan.addRenderPass(renderPassBuilder);
+
+        // engine.vulkan.addRenderPass(
+        //     engine.vulkan.makeRenderPassBuilder({vk::Format::eR32G32B32A32Sfloat}, false, true));
     }
 
     Engine& engine;
@@ -92,7 +100,7 @@ struct PhongShadows : MultiShader<N> {
 
     virtual void pre_attach() override {
         for (auto& shader : this->shaders)
-            static_cast<PhongShadow&>(*shader).textures[11] = engine.get_offscreen_color_texture();
+            static_cast<PhongShadow&>(*shader).textures[11] = engine.get_offscreen_depth_texture();
         engine.vulkan.addRenderPass();
     }
 
@@ -101,32 +109,45 @@ struct PhongShadows : MultiShader<N> {
 
 int main(int argc, char* argv[]) {
     try {
-        Engine engine(1600, 900, 2);
+        int width = 1600, height = 900;
+        int xpos = -1, ypos = -1;
+        for (;;) {
+            Engine engine(width, height, 2);
+            if (xpos != -1 && ypos != -1) engine.set_window_pos(xpos, ypos);
 
-        auto player = std::make_unique<Player>(engine, glm::radians(75.0f), 1600.0 / 900.0, 1e-2, 1000);
-        player->position = {30, 30, 30};
-        engine.set_player(std::move(player));
+            auto player = std::make_unique<Player>(engine, glm::radians(75.0f), 1600.0 / 900.0, 1e-2, 1000);
+            player->position = {30, 30, 30};
+            engine.set_player(std::move(player));
 
-        auto floorModel = glm::scale(glm::translate(glm::mat4(1), glm::vec3(0, 0, -30)), glm::vec3(4));
-        auto marryModel1 = glm::scale(glm::mat4(1), glm::vec3(20));
-        auto marryModel2 = glm::scale(glm::translate(glm::mat4(1), glm::vec3(40, 0, -40)), glm::vec3(10));
+            auto floorModel = glm::scale(glm::translate(glm::mat4(1), glm::vec3(0, 0, -30)), glm::vec3(4));
+            auto marryModel1 = glm::scale(glm::mat4(1), glm::vec3(20));
+            auto marryModel2 = glm::scale(glm::translate(glm::mat4(1), glm::vec3(40, 0, -40)), glm::vec3(10));
 
-        auto firstPass = std::make_unique<Shadows<3>>(engine);
-        firstPass->shaders[0] = std::make_unique<Shadow>(engine, "floor.gltf", floorModel);
-        firstPass->shaders[1] = std::make_unique<Shadow>(engine, "marry.gltf", marryModel1);
-        firstPass->shaders[2] = std::make_unique<Shadow>(engine, "marry.gltf", marryModel2);
+            auto firstPass = std::make_unique<Shadows<3>>(engine);
+            firstPass->shaders[0] = std::make_unique<Shadow>(engine, "floor.gltf", floorModel);
+            firstPass->shaders[1] = std::make_unique<Shadow>(engine, "marry.gltf", marryModel1);
+            firstPass->shaders[2] = std::make_unique<Shadow>(engine, "marry.gltf", marryModel2);
 
-        auto secondPass = std::make_unique<PhongShadows<3>>(engine);
-        secondPass->shaders[0] = std::make_unique<PhongShadow>(engine, "floor.gltf", "floor", floorModel, false);
-        secondPass->shaders[1] = std::make_unique<PhongShadow>(engine, "marry.gltf", "marry", marryModel1);
-        secondPass->shaders[2] = std::make_unique<PhongShadow>(engine, "marry.gltf", "marry", marryModel2);
+            auto secondPass = std::make_unique<PhongShadows<3>>(engine);
+            secondPass->shaders[0] = std::make_unique<PhongShadow>(engine, "floor.gltf", "floor", floorModel, false);
+            secondPass->shaders[1] = std::make_unique<PhongShadow>(engine, "marry.gltf", "marry", marryModel1);
+            secondPass->shaders[2] = std::make_unique<PhongShadow>(engine, "marry.gltf", "marry", marryModel2);
 
-        auto mesh = std::make_unique<MultiPassShader<2>>(engine.vulkan);
-        mesh->shaders[0] = std::move(firstPass);
-        mesh->shaders[1] = std::move(secondPass);
-        engine.add_mesh(std::move(mesh));
+            auto mesh = std::make_unique<MultiPassShader<2>>(engine.vulkan);
+            mesh->shaders[0] = std::move(firstPass);
+            mesh->shaders[1] = std::move(secondPass);
+            engine.add_mesh(std::move(mesh));
 
-        engine.run();
+            engine.quit_on_resize = true;
+            engine.run();
+
+            if (engine.quit_reason != Engine::WINDOW_RESIZE) break;
+
+            width = engine.width;
+            height = engine.height;
+            xpos = engine.xpos;
+            ypos = engine.ypos;
+        }
     } catch (const std::exception& e) {
         std::cerr << e.what();
     } catch (...) {

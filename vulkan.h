@@ -31,6 +31,7 @@ class Vulkan {
         vk::ImageView view = {};
         VmaAllocation memory = {};
         vk::Sampler sampler = {};
+        vk::Format format = {};
 
         vk::Buffer stagingBuffer = {};
         VmaAllocation stagingMemory = {};
@@ -38,7 +39,7 @@ class Vulkan {
     };
 
     struct RenderPassBuilder {
-        RenderPassBuilder& addSubpass(const std::initializer_list<uint32_t>& colors,
+        RenderPassBuilder& addSubpass(const std::initializer_list<uint32_t>& colors = {},
                                       const std::initializer_list<uint32_t>& inputs = {});
         RenderPassBuilder& dependOn(uint32_t subpass);
 

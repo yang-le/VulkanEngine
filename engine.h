@@ -13,7 +13,7 @@
 
 class Engine {
    public:
-    Engine(uint32_t width, uint32_t height, uint32_t renderPassCount = 1);
+    Engine(int width, int height, uint32_t renderPassCount = 1);
     ~Engine();
 
     void run();
@@ -23,6 +23,7 @@ class Engine {
     void set_player(std::unique_ptr<Player> player) { this->player = std::move(player); }
     void set_scene(std::unique_ptr<Scene> scene) { this->scene = std::move(scene); }
     void set_bg_color(const vk::ClearColorValue& color) { vulkan.bgColor = color; }
+    void set_window_pos(int xpos, int ypos);
 
     Player& get_player() { return *player; }
     Scene& get_scene() { return *scene; }
@@ -45,6 +46,12 @@ class Engine {
     Vulkan vulkan;
     float mouse_dx = 0, mouse_dy = 0;
 
+    int width, height;
+    int xpos = -1, ypos = -1;
+
+    bool quit_on_resize = false;
+    enum { WINDOW_CLOSE, WINDOW_RESIZE } quit_reason = WINDOW_CLOSE;
+
    private:
     void render();
     void handle_events(int button, int action) { player->handle_events(button, action); }
@@ -56,7 +63,7 @@ class Engine {
         const Engine& engine;
     };
 
-    uint32_t width, height;
+    bool running;
     GLFWwindow* window;
 
     std::chrono::system_clock::time_point start_time;

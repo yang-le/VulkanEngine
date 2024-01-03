@@ -2,14 +2,16 @@
 
 #include "gltf.h"
 
+namespace {
+auto lightView = glm::lookAt(glm::vec3(0, 80, 80), glm::vec3(0), glm::vec3(0, 1, 0));
+auto lightProjection = glm::ortho(-800.0f, 800.0f, -450.0f, 450.0f, 1e-2f, 1000.0f);
+}  // namespace
+
 struct PhongShadow : gltf::Shader {
     PhongShadow(Engine& engine, const std::string& gltf_file, const std::string& shader_file, const glm::mat4& model,
                 bool use_texture = true)
         : engine(engine), gltf::Shader(gltf_file, shader_file, engine) {
         vert_formats = {vk::Format::eR32G32B32Sfloat, vk::Format::eR32G32B32Sfloat, vk::Format::eR32G32Sfloat};
-
-        auto lightView = glm::lookAt(glm::vec3(0, 80, 80), glm::vec3(0), glm::vec3(0, 1, 0));
-        auto lightProjection = glm::ortho(-800.0f, 800.0f, -450.0f, 450.0f, 1e-2f, 1000.0f);
 
         write_uniform(2, model);                                // model matrix
         write_uniform(3, lightProjection * lightView * model);  // light MVP
@@ -19,6 +21,7 @@ struct PhongShadow : gltf::Shader {
     virtual ~PhongShadow() override {
         // erase texture to avoid double free
         if (!model.textures.empty()) textures.erase(10);
+        textures.erase(11);
     }
 
     virtual void init() override {
@@ -41,6 +44,8 @@ struct PhongShadow : gltf::Shader {
         if (!model.textures.empty()) textures[10] = model.textures[0];
     }
 
+    virtual void pre_attach() override { textures[11] = engine.get_offscreen_depth_texture(); }
+
     virtual void update() override {
         Shader::update();
 
@@ -54,9 +59,6 @@ struct Shadow : gltf::Shader {
     Shadow(Engine& engine, const std::string& gltf_file, const glm::mat4& model)
         : gltf::Shader(gltf_file, "shadow", engine) {
         vert_formats = {vk::Format::eR32G32B32Sfloat, vk::Format::eR32G32B32Sfloat, vk::Format::eR32G32Sfloat};
-
-        auto lightView = glm::lookAt(glm::vec3(0, 80, 80), glm::vec3(0), glm::vec3(0, 1, 0));
-        auto lightProjection = glm::ortho(-800.0f, 800.0f, -450.0f, 450.0f, 1e-2f, 1000.0f);
 
         write_uniform(0, lightProjection * lightView * model);  // light MVP
     }
@@ -81,9 +83,6 @@ struct Shadows : MultiShader<N> {
         auto renderPassBuilder = engine.vulkan.makeRenderPassBuilder(depthAttachment, 0).addSubpass();
         renderPassBuilder.offscreenDepth = true;
         engine.vulkan.addRenderPass(renderPassBuilder);
-
-        // engine.vulkan.addRenderPass(
-        //     engine.vulkan.makeRenderPassBuilder({vk::Format::eR32G32B32A32Sfloat}, false, true));
     }
 
     Engine& engine;
@@ -93,14 +92,8 @@ template <size_t N>
 struct PhongShadows : MultiShader<N> {
     PhongShadows(Engine& engine) : engine(engine) {}
 
-    virtual ~PhongShadows() override {
-        // erase texture to avoid double free
-        for (auto& shader : this->shaders) static_cast<PhongShadow&>(*shader).textures.erase(11);
-    }
-
     virtual void pre_attach() override {
-        for (auto& shader : this->shaders)
-            static_cast<PhongShadow&>(*shader).textures[11] = engine.get_offscreen_depth_texture();
+        MultiShader<N>::pre_attach();
         engine.vulkan.addRenderPass();
     }
 

@@ -30,22 +30,16 @@ layout(binding = 11) uniform sampler2D uShadowMap;
 
 layout(location = 0) out vec4 fragColor;
 
-float unpack(vec4 rgbaDepth) {
-    const vec4 bitShift = vec4(1.0, 1.0 / 256.0, 1.0 / (256.0 * 256.0), 1.0 / (256.0 * 256.0 * 256.0));
-    return dot(rgbaDepth, bitShift);
-}
-
-float useShadowMap(sampler2D shadowMap, vec4 shadowCoord) {
-    float depth = unpack(texture(shadowMap, shadowCoord.st));
-    // return (shadowCoord.z > depth + EPS) ? exp(10.0 * (depth - shadowCoord.z)) : 1.0;
-    return (shadowCoord.z > depth + EPS) ? 0.0 : 1.0;
+float useShadowMap(vec4 shadowCoord) {
+    float depth = texture(uShadowMap, shadowCoord.st).r;
+    return (shadowCoord.z > depth + EPS) ? 0.1 : 1.0;
 }
 
 #include "blinnPhong.h"
 
 void main(void) {
     float visibility;
-    visibility = useShadowMap(uShadowMap, vPositionFromLight / vPositionFromLight.w);
+    visibility = useShadowMap(vPositionFromLight / vPositionFromLight.w);
 
     vec3 color;
     if(uTextureSample == 1) {

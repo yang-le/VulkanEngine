@@ -109,6 +109,9 @@ struct MultiShader : IShader {
         for (auto &shader : shaders) shader->attach(subpass);
     }
 
+    virtual void pre_attach() override {
+        for (auto &shader : shaders) shader->pre_attach();
+    }
     virtual void init() override {
         for (auto &shader : shaders) shader->init();
     }

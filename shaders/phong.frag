@@ -1,6 +1,6 @@
 #version 450
 
-#include "constants.h"
+#include "constants.glsl"
 
 layout(location = 0) in vec3 vFragPos;
 layout(location = 1) in vec3 vNormal;
@@ -28,7 +28,7 @@ layout(binding = 9) uniform sampler2D uSampler;
 
 layout(location = 0) out vec4 fragColor;
 
-#include "blinnPhong.h"
+#include "blinnPhong.glsl"
 
 void main(void) {
     vec3 color;
@@ -38,5 +38,9 @@ void main(void) {
         color = uKd;
     }
 
-    fragColor = vec4(blinnPhong(color), 1.0);
+    color = pow(color, gamma);
+    color = blinnPhong(color, 0.05, color, uLightIntensity, uKs, uLightIntensity, uLightPos, uCameraPos, vFragPos, vNormal, 32);
+    color = pow(color, inv_gamma);
+
+    fragColor = vec4(color, 1.0);
 }

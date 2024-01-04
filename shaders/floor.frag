@@ -1,6 +1,6 @@
 #version 450
 
-#include "constants.h"
+#include "constants.glsl"
 
 layout(location = 0) in vec3 vFragPos;
 layout(location = 1) in vec3 vNormal;
@@ -22,9 +22,6 @@ layout(binding = 7) uniform uCameraPos_t {
 layout(binding = 8) uniform uLightIntensity_t {
     float uLightIntensity;
 };
-layout(binding = 9) uniform uTextureSample_t {
-    int uTextureSample;
-};
 layout(binding = 11) uniform sampler2D uShadowMap;
 
 layout(location = 0) out vec4 fragColor;
@@ -34,11 +31,15 @@ float useShadowMap(vec4 shadowCoord) {
     return (shadowCoord.z > depth + EPS) ? 0.1 : 1.0;
 }
 
-#include "blinnPhong.h"
+#include "blinnPhong.glsl"
 
 void main(void) {
-    float visibility;
-    visibility = useShadowMap(vPositionFromLight / vPositionFromLight.w);
+    float visibility = useShadowMap(vPositionFromLight / vPositionFromLight.w);
+    vec3 color = uKd;
 
-    fragColor = vec4(blinnPhong(uKd) * visibility, 1.0);
+    color = pow(color, gamma);
+    color = blinnPhong(color, 0.05, color, uLightIntensity, uKs, uLightIntensity, uLightPos, uCameraPos, vFragPos, vNormal, 32);
+    color = pow(color, inv_gamma);
+
+    fragColor = vec4(color * visibility, 1.0);
 }

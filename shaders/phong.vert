@@ -22,7 +22,7 @@ void main(void) {
   vec4 FragPos = m_model * vec4(aVertexPosition, 1.0);
 
   vFragPos = FragPos.xyz;
-  vNormal = (m_model * vec4(aNormalPosition, 1.0)).xyz;
+  vNormal = normalize((m_model * vec4(aNormalPosition, 1.0)).xyz);
   vTextureCoord = aTextureCoord;
 
   gl_Position = m_proj * m_view * FragPos;

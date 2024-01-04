@@ -1,6 +1,6 @@
 #version 450
 
-#include "constants.h"
+#include "constants.glsl"
 
 layout(location = 0) flat in int voxel_id;
 layout(location = 1) flat in int face_id;

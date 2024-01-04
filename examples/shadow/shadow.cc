@@ -4,18 +4,16 @@
 
 namespace {
 auto lightView = glm::lookAt(glm::vec3(0, 80, 80), glm::vec3(0), glm::vec3(0, 1, 0));
-auto lightProjection = glm::ortho(-800.0f, 800.0f, -450.0f, 450.0f, 1e-2f, 1000.0f);
+auto lightProjection = glm::ortho(-100.0f, 100.0f, -100.0f, 100.0f, 1e-2f, 1000.0f);
 }  // namespace
 
 struct PhongShadow : gltf::Shader {
-    PhongShadow(Engine& engine, const std::string& gltf_file, const std::string& shader_file, const glm::mat4& model,
-                bool use_texture = true)
+    PhongShadow(Engine& engine, const std::string& gltf_file, const std::string& shader_file, const glm::mat4& model)
         : engine(engine), gltf::Shader(gltf_file, shader_file, engine) {
         vert_formats = {vk::Format::eR32G32B32Sfloat, vk::Format::eR32G32B32Sfloat, vk::Format::eR32G32Sfloat};
 
         write_uniform(2, model);                                // model matrix
         write_uniform(3, lightProjection * lightView * model);  // light MVP
-        write_uniform(9, use_texture ? 1 : 0, vk::ShaderStageFlagBits::eFragment);
     }
 
     virtual ~PhongShadow() override {
@@ -122,7 +120,7 @@ int main(int argc, char* argv[]) {
             firstPass->shaders[2] = std::make_unique<Shadow>(engine, "marry.gltf", marryModel2);
 
             auto secondPass = std::make_unique<PhongShadows<3>>(engine);
-            secondPass->shaders[0] = std::make_unique<PhongShadow>(engine, "floor.gltf", "floor", floorModel, false);
+            secondPass->shaders[0] = std::make_unique<PhongShadow>(engine, "floor.gltf", "floor", floorModel);
             secondPass->shaders[1] = std::make_unique<PhongShadow>(engine, "marry.gltf", "marry", marryModel1);
             secondPass->shaders[2] = std::make_unique<PhongShadow>(engine, "marry.gltf", "marry", marryModel2);
 

@@ -26,15 +26,13 @@ layout(binding = 11) uniform sampler2D uShadowMap;
 
 layout(location = 0) out vec4 fragColor;
 
-float useShadowMap(vec4 shadowCoord) {
-    float depth = texture(uShadowMap, shadowCoord.st).r;
-    return (shadowCoord.z > depth + EPS) ? 0.1 : 1.0;
-}
-
+#include "shadow.glsl"
 #include "blinnPhong.glsl"
 
 void main(void) {
-    float visibility = useShadowMap(vPositionFromLight / vPositionFromLight.w);
+    // float visibility = useShadowMap(uShadowMap, vPositionFromLight / vPositionFromLight.w);
+    // float visibility = PCF(uShadowMap, vPositionFromLight / vPositionFromLight.w, FILTER_SIZE);
+    float visibility = PCSS(uShadowMap, vPositionFromLight / vPositionFromLight.w);
     vec3 color = uKd;
 
     color = pow(color, gamma);

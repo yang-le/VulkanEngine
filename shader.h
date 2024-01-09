@@ -82,9 +82,11 @@ struct Shader : IShader {
     }
 
     void write_texture(int binding, const std::string &filename, uint32_t layers = 1);
-    void write_texture(int binding, const void *data, uint32_t width, uint32_t height, uint32_t layers = 1);
+    void write_texture(int binding, const void *data, uint32_t width, uint32_t height, uint32_t layers = 1,
+                       bool cubemap = false);
     void write_texture(int binding, std::initializer_list<std::string> filenames,
                        std::initializer_list<uint32_t> index);
+    void write_texture(int binding, std::array<std::string, 6> filenames);
 
     Vulkan::Buffer vertex;
     std::vector<vk::Format> vert_formats;

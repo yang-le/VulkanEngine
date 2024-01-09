@@ -74,13 +74,14 @@ void Shader::write_texture(int binding, const std::string& filename, uint32_t la
     void* image;
     uint32_t width, height;
     std::tie(image, width, height) = loadImage("assets/" + filename);
-    write_texture(binding, image, width, height, layers);
+    write_texture(binding, image, width, height / layers, layers);
     stbi_image_free(image);
 }
 
-void Shader::write_texture(int binding, const void* data, uint32_t width, uint32_t height, uint32_t layers) {
+void Shader::write_texture(int binding, const void* data, uint32_t width, uint32_t height, uint32_t layers,
+                           bool cubemap) {
     auto& texture = textures[binding];
-    if (!texture.sampler) texture = vulkan->createTexture({(uint32_t)width, (uint32_t)height / layers}, data, layers);
+    if (!texture.sampler) texture = vulkan->createTexture({(uint32_t)width, (uint32_t)height}, data, layers, cubemap);
 }
 
 void Shader::write_texture(int binding, std::initializer_list<std::string> filenames,
@@ -102,6 +103,7 @@ void Shader::write_texture(int binding, std::initializer_list<std::string> filen
     uint32_t layers = (uint32_t)index.size() / 3 + 1;
     std::vector<stbi_uc> data(3 * 4 * width * height * layers);
 
+    // layer 0 is always empty, start from layer 1
     auto it = index.begin();
     for (unsigned i = 1; i < layers; ++i, it += 3)
         for (unsigned j = 0; j < height; ++j)
@@ -109,7 +111,31 @@ void Shader::write_texture(int binding, std::initializer_list<std::string> filen
                 memcpy(&data[((i * height + j) * 3 + k) * 4 * width], &images[*(it + k)][j * 4 * width], 4 * width);
 
     // free all images
-    for (int i = 1; i < filenames.size(); ++i) stbi_image_free(images[i]);
+    for (int i = 0; i < filenames.size(); ++i) stbi_image_free(images[i]);
 
-    write_texture(binding, data.data(), 3 * width, height * layers, layers);
+    write_texture(binding, data.data(), 3 * width, height, layers);
+}
+
+void Shader::write_texture(int binding, std::array<std::string, 6> filenames) {
+    uint32_t width, height;
+    std::array<stbi_uc*, 6> images;
+
+    // load all images
+    std::tie(images[0], width, height) = loadImage("assets/" + filenames[0]);
+    assert(width == height);
+
+    for (int i = 1; i < 6; ++i) {
+        uint32_t width_, height_;
+        std::tie(images[i], width_, height_) = loadImage("assets/" + filenames[i]);
+        assert(width == width_);
+        assert(height == height_);
+    }
+
+    std::vector<stbi_uc> data(4 * width * height * 6);
+    for (int i = 0; i < 6; ++i) memcpy(&data[4 * width * height * i], images[i], 4 * width * height);
+
+    // free all images
+    for (int i = 0; i < 6; ++i) stbi_image_free(images[i]);
+
+    write_texture(binding, data.data(), width, height, 6, true);
 }

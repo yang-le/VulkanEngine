@@ -180,9 +180,9 @@ void Model::loadTextures() {
         else {
             auto sampler = model.samplers[tex.sampler];
             texture = vulkan->createTexture({(uint32_t)image.width, (uint32_t)image.height}, image.image.data(), 1,
-                                            true, getFilterMode(sampler.magFilter), getFilterMode(sampler.minFilter),
-                                            getSamplerMode(sampler.wrapS), getSamplerMode(sampler.wrapT),
-                                            getSamplerMode(sampler.wrapT));
+                                            false, true, getFilterMode(sampler.magFilter),
+                                            getFilterMode(sampler.minFilter), getSamplerMode(sampler.wrapS),
+                                            getSamplerMode(sampler.wrapT), getSamplerMode(sampler.wrapT));
         }
         textures.push_back(texture);
     }

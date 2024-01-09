@@ -251,10 +251,11 @@ std::pair<vk::Buffer, VmaAllocation> createBuffer(const VmaAllocator& vmaAllocat
 std::pair<vk::Image, VmaAllocation> createImage(const VmaAllocator& vmaAllocator, vk::Extent2D extent,
                                                 vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage,
                                                 vk::ImageLayout layout = vk::ImageLayout::eUndefined,
-                                                uint32_t mipLevels = 1, uint32_t layers = 1) {
+                                                uint32_t mipLevels = 1, uint32_t layers = 1, bool cubemap = false) {
     vk::ImageCreateInfo imageCreateInfo({}, vk::ImageType::e2D, format, vk::Extent3D(extent, 1), mipLevels, layers,
                                         vk::SampleCountFlagBits::e1, tiling, usage, vk::SharingMode::eExclusive, {},
                                         layout);
+    if (cubemap) imageCreateInfo.setFlags(vk::ImageCreateFlagBits::eCubeCompatible);
 
     VmaAllocationCreateInfo allocInfo = {};
     allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
@@ -570,8 +571,8 @@ void Vulkan::destroyGltfBuffer(const Buffer& buffer) {
     if (buffer.size) vmaDestroyBuffer(vmaAllocator, buffer.buffer, buffer.memory);
 }
 
-Vulkan::Texture Vulkan::createTexture(vk::Extent2D extent, const void* data, uint32_t layers, bool anisotropy,
-                                      vk::Filter mag, vk::Filter min, vk::SamplerAddressMode modeU,
+Vulkan::Texture Vulkan::createTexture(vk::Extent2D extent, const void* data, uint32_t layers, bool cubemap,
+                                      bool anisotropy, vk::Filter mag, vk::Filter min, vk::SamplerAddressMode modeU,
                                       vk::SamplerAddressMode modeV, vk::SamplerAddressMode modeW) {
     Texture texture;
     texture.format = vk::Format::eR8G8B8A8Unorm;
@@ -593,7 +594,7 @@ Vulkan::Texture Vulkan::createTexture(vk::Extent2D extent, const void* data, uin
     std::tie(texture.image, texture.memory) = createImage(
         vmaAllocator, extent, texture.format, needStaging ? vk::ImageTiling::eOptimal : vk::ImageTiling::eLinear,
         vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eTransferSrc,
-        needStaging ? vk::ImageLayout::eUndefined : vk::ImageLayout::ePreinitialized, mipLevels, layers);
+        needStaging ? vk::ImageLayout::eUndefined : vk::ImageLayout::ePreinitialized, mipLevels, layers, cubemap);
 
     if (needStaging)
         std::tie(texture.stagingBuffer, texture.stagingMemory) =
@@ -650,6 +651,7 @@ Vulkan::Texture Vulkan::createTexture(vk::Extent2D extent, const void* data, uin
     vk::ImageViewCreateInfo imageViewCreateInfo(
         {}, texture.image, layers == 1 ? vk::ImageViewType::e2D : vk::ImageViewType::e2DArray, texture.format, {},
         {vk::ImageAspectFlagBits::eColor, 0, mipLevels, 0, layers});
+    if (cubemap) imageViewCreateInfo.setViewType(vk::ImageViewType::eCube);
     texture.view = device.createImageView(imageViewCreateInfo);
 
     return texture;
@@ -741,6 +743,7 @@ void Vulkan::initDevice(std::function<vk::SurfaceKHR(const vk::Instance&)> getSu
     deviceCreateInfo.setPEnabledExtensionNames(deviceExtensions);
 
     deviceFeatures.samplerAnisotropy = vk::True;
+    deviceFeatures.imageCubeArray = vk::True;
     deviceCreateInfo.setPEnabledFeatures(&deviceFeatures);
 
     device = physicalDevice.createDevice(deviceCreateInfo);

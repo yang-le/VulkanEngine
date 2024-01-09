@@ -117,8 +117,9 @@ class Vulkan {
     Buffer createGltfBuffer(const void* data, size_t size);
     void destroyGltfBuffer(const Buffer& buffer);
 
-    Texture createTexture(vk::Extent2D extent, const void* data, uint32_t layers = 1, bool anisotropy = true,
-                          vk::Filter mag = vk::Filter::eLinear, vk::Filter min = vk::Filter::eLinear,
+    Texture createTexture(vk::Extent2D extent, const void* data, uint32_t layers = 1, bool cubemap = false,
+                          bool anisotropy = true, vk::Filter mag = vk::Filter::eLinear,
+                          vk::Filter min = vk::Filter::eLinear,
                           vk::SamplerAddressMode modeU = vk::SamplerAddressMode::eRepeat,
                           vk::SamplerAddressMode modeV = vk::SamplerAddressMode::eRepeat,
                           vk::SamplerAddressMode modeW = vk::SamplerAddressMode::eRepeat);

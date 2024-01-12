@@ -32,6 +32,7 @@ class Engine {
     bool get_key_state(size_t key) const { return key_state[key]; }
     float get_time() const { return std::chrono::duration_cast<std::chrono::duration<float>>(t - start_time).count(); }
     float get_delta_time() const { return dt.count(); }
+    vk::Format get_surface_format() const { return vulkan.surfaceFormat.format; }
 
     template <typename S>
     S& get_scene() {

@@ -443,7 +443,7 @@ void Vulkan::draw(uint32_t i, const Buffer& vertex) {
     if (descriptorSet(i))
         frame.commandBuffer().bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout(i), 0,
                                                  descriptorSet(i), nullptr);
-    if (renderPassBuilder().descriptorSets[currentBuffer])
+    if (!renderPassBuilder().descriptorSets.empty())
         frame.commandBuffer().bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout(i), 1,
                                                  renderPassBuilder().descriptorSets[currentBuffer], nullptr);
     frame.commandBuffer().bindVertexBuffers(0, vertex.buffer, {0});
@@ -904,7 +904,7 @@ void Vulkan::initFrameBuffers() {
 
 uint32_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
                               uint32_t vertexStride, const std::vector<vk::Format>& vertexFormats, uint32_t subpass,
-                              vk::CullModeFlags cullMode, bool depthBuffered) {
+                              vk::CullModeFlags cullMode) {
     vk::VertexInputBindingDescription vertexInputBindingDescription(0, vertexStride);
 
     std::vector<vk::VertexInputAttributeDescription> vertexInputAtrributeDescriptions;
@@ -918,13 +918,12 @@ uint32_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const 
 
     return initPipeline(vertexShaderModule, fragmentShaderModule,
                         {{}, vertexInputBindingDescription, vertexInputAtrributeDescriptions},
-                        vk::PrimitiveTopology::eTriangleList, subpass, cullMode, depthBuffered);
+                        vk::PrimitiveTopology::eTriangleList, subpass, cullMode);
 }
 
 uint32_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
                               const std::vector<uint32_t>& vertexStrides, const std::vector<vk::Format>& vertexFormats,
-                              vk::PrimitiveTopology primitiveTopology, uint32_t subpass, vk::CullModeFlags cullMode,
-                              bool depthBuffered) {
+                              vk::PrimitiveTopology primitiveTopology, uint32_t subpass, vk::CullModeFlags cullMode) {
     std::vector<vk::VertexInputBindingDescription> vertexInputBindingDescriptions;
     vertexInputBindingDescriptions.reserve(vertexStrides.size());
     for (int i = 0; i < vertexStrides.size(); ++i) vertexInputBindingDescriptions.emplace_back(i, vertexStrides[i]);
@@ -937,13 +936,13 @@ uint32_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const 
     assert(4 <= physicalDevice.getProperties().limits.maxPushConstantsSize);
     return initPipeline(vertexShaderModule, fragmentShaderModule,
                         {{}, vertexInputBindingDescriptions, vertexInputAtrributeDescriptions}, primitiveTopology,
-                        subpass, cullMode, depthBuffered, {vk::ShaderStageFlagBits::eAll, 0, 4});
+                        subpass, cullMode, {vk::ShaderStageFlagBits::eAll, 0, 4});
 }
 
 uint32_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
                               const vk::PipelineVertexInputStateCreateInfo& vertexInfo,
                               vk::PrimitiveTopology primitiveTopology, uint32_t subpass, vk::CullModeFlags cullMode,
-                              bool depthBuffered, const vk::PushConstantRange& pushConstant) {
+                              const vk::PushConstantRange& pushConstant) {
     std::array<vk::PipelineShaderStageCreateInfo, 2> pipelineShaderStageCreateInfos = {
         vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eVertex, vertexShaderModule, "main"),
         vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eFragment, fragmentShaderModule, "main")};
@@ -958,6 +957,8 @@ uint32_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const 
         {}, false, false, vk::PolygonMode::eFill, cullMode, vk::FrontFace::eCounterClockwise, false, 0.0f, 0.0f, 0.0f,
         1.0f);
     vk::PipelineMultisampleStateCreateInfo pipelineMultisampleStateCreateInfo({}, vk::SampleCountFlagBits::e1);
+
+    bool depthBuffered = renderPassBuilder().depthReference != nullptr;
     vk::PipelineDepthStencilStateCreateInfo pipelineDepthStencilStateCreateInfo({}, depthBuffered, depthBuffered,
                                                                                 vk::CompareOp::eLessOrEqual);
 

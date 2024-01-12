@@ -144,15 +144,14 @@ class Vulkan {
     void initDescriptorSet(const std::map<int, Buffer>& uniforms, const std::map<int, Texture>& textures);
     uint32_t initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
                           uint32_t vertexStride, const std::vector<vk::Format>& vertexFormats, uint32_t subpass,
-                          vk::CullModeFlags cullMode, bool depthBuffered = true);
+                          vk::CullModeFlags cullMode);
     uint32_t initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
                           const std::vector<uint32_t>& vertexStrides, const std::vector<vk::Format>& vertexFormats,
-                          vk::PrimitiveTopology primitiveTopology, uint32_t subpass, vk::CullModeFlags cullMode,
-                          bool depthBuffered = true);
+                          vk::PrimitiveTopology primitiveTopology, uint32_t subpass, vk::CullModeFlags cullMode);
     uint32_t initPipeline(const vk::ShaderModule& vertexShaderModule, const vk::ShaderModule& fragmentShaderModule,
                           const vk::PipelineVertexInputStateCreateInfo& vertexInfo,
                           vk::PrimitiveTopology primitiveTopology, uint32_t subpass, vk::CullModeFlags cullMode,
-                          bool depthBuffered, const vk::PushConstantRange& pushConstant = {});
+                          const vk::PushConstantRange& pushConstant = {});
     void destroySwapChain();
 
    private:

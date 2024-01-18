@@ -164,7 +164,13 @@ void Model::load(const tinygltf::Mesh& mesh) {
             newPrimitive.vertexStrides.push_back(stride);
         }
 
-        // record and get drawId
+        if (primitive.material > -1) {
+            auto material = model.materials[primitive.material];
+
+            newPrimitive.baseColorFactor = glm::make_vec4(material.pbrMetallicRoughness.baseColorFactor.data());
+            if (material.pbrMetallicRoughness.baseColorTexture.index > -1)
+                newPrimitive.baseColorTexture = &textures[material.pbrMetallicRoughness.baseColorTexture.index];
+        }
 
         newMesh.primitives.push_back(newPrimitive);
     }

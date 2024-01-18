@@ -21,6 +21,10 @@ struct Primitive {
     std::vector<vk::Buffer> vertex;
     std::vector<vk::DeviceSize> vertexOffset;
     std::vector<uint32_t> vertexStrides;
+
+    glm::vec4 baseColorFactor;
+    Vulkan::Texture* baseColorTexture = nullptr;
+
     vk::PrimitiveTopology mode;
     uint32_t drawId;
 };
@@ -37,11 +41,11 @@ struct Node {
     glm::vec3 translation{};
     glm::vec3 scale{1.0f};
     glm::quat rotation{};
-    glm::mat4 localMatrix() {
+    glm::mat4 localMatrix() const {
         return glm::translate(glm::mat4(1.0f), translation) * glm::mat4(rotation) * glm::scale(glm::mat4(1.0f), scale) *
                matrix;
     }
-    glm::mat4 getMatrix() {
+    glm::mat4 getMatrix() const {
         glm::mat4 m = localMatrix();
         for (Node* p = parent; p; p = p->parent) m *= p->localMatrix();
         return m;
@@ -61,65 +65,6 @@ struct Model {
     void load(Node* parent, const tinygltf::Node& node);
     void load(const tinygltf::Mesh& mesh);
 
-    void draw(const Primitive& primitive) {
-        vulkan->drawIndexed(primitive.drawId, primitive.index, primitive.indexOffset, primitive.indexType,
-                            (uint32_t)primitive.indexCount, primitive.vertex, primitive.vertexOffset);
-    }
-    void draw(const Mesh& mesh) {
-        for (auto& primitive : mesh.primitives) draw(primitive);
-    }
-    void draw(const Node& node) {
-        if (node.mesh) draw(*node.mesh);
-        for (auto& child : node.children) draw(child);
-    }
-    void draw(size_t i = -1) {
-        if (i == -1) i = model.defaultScene > -1 ? model.defaultScene : 0;
-        for (auto j : model.scenes[i].nodes) draw(nodes[j]);
-    }
-
-    void attachShader(Primitive& primitive, vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
-                      const std::vector<vk::Format>& vertexFormats, const std::map<int, Vulkan::Buffer>& uniforms,
-                      const std::map<int, Vulkan::Texture>& textures, uint32_t subpass,
-                      vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack) {
-        primitive.drawId =
-            vulkan->attachShader(vertexShaderModule, fragmentShaderModule, primitive.vertexStrides, vertexFormats,
-                                 uniforms, textures, primitive.mode, subpass, cullMode, false);
-    }
-
-    void attachShader(Mesh& mesh, vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
-                      const std::vector<vk::Format>& vertexFormats, const std::map<int, Vulkan::Buffer>& uniforms,
-                      const std::map<int, Vulkan::Texture>& textures, uint32_t subpass,
-                      vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack) {
-        for (auto& primitive : mesh.primitives)
-            attachShader(primitive, vertexShaderModule, fragmentShaderModule, vertexFormats, uniforms, textures,
-                         subpass, cullMode);
-    }
-
-    void attachShader(Node& node, vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
-                      const std::vector<vk::Format>& vertexFormats, const std::map<int, Vulkan::Buffer>& uniforms,
-                      const std::map<int, Vulkan::Texture>& textures, uint32_t subpass,
-                      vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack) {
-        if (node.mesh)
-            attachShader(*node.mesh, vertexShaderModule, fragmentShaderModule, vertexFormats, uniforms, textures,
-                         subpass, cullMode);
-        for (auto& child : node.children)
-            attachShader(child, vertexShaderModule, fragmentShaderModule, vertexFormats, uniforms, textures, subpass,
-                         cullMode);
-    }
-
-    void attachShader(vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
-                      const std::vector<vk::Format>& vertexFormats, const std::map<int, Vulkan::Buffer>& uniforms,
-                      const std::map<int, Vulkan::Texture>& textures, uint32_t subpass, size_t i = -1,
-                      vk::CullModeFlags cullMode = vk::CullModeFlagBits::eBack) {
-        if (i == -1) i = model.defaultScene > -1 ? model.defaultScene : 0;
-        for (auto j : model.scenes[i].nodes)
-            attachShader(nodes[j], vertexShaderModule, fragmentShaderModule, vertexFormats, uniforms, textures, subpass,
-                         cullMode);
-
-        vulkan->destroyShaderModule(fragmentShaderModule);
-        vulkan->destroyShaderModule(vertexShaderModule);
-    }
-
     void loadTextures();
     void loadBufferViews() {
         for (auto& bufferView : model.bufferViews)
@@ -136,17 +81,64 @@ struct Model {
     std::vector<Mesh> meshes;  // for draw
 };
 
+struct PrimitiveShader : ::Shader {
+    PrimitiveShader(Primitive& primitive, const std::string& name, Engine& engine)
+        : primitive(primitive), ::Shader(name, engine) {}
+
+    virtual void attach(uint32_t subpass = 0) override {
+        draw_id = vulkan->attachShader(vert_shader, frag_shader, primitive.vertexStrides, vert_formats, uniforms,
+                                       textures, primitive.mode, subpass, cull_mode);
+    }
+
+    virtual void draw() override {
+        vulkan->drawIndexed(draw_id, primitive.index, primitive.indexOffset, primitive.indexType,
+                            (uint32_t)primitive.indexCount, primitive.vertex, primitive.vertexOffset);
+    }
+
+    Primitive& primitive;
+};
+
 struct Shader : ::Shader {
     Shader(const std::string& gltf_file, const std::string& name, Engine& engine)
         : ::Shader(name, engine), model(&engine.vulkan, "assets/" + gltf_file) {
         model.load();
     }
 
-    virtual void attach(uint32_t subpass = 0) override {
-        model.attachShader(vert_shader, frag_shader, vert_formats, uniforms, textures, subpass);
+    void attachShader(Node& node, vk::ShaderModule vertexShaderModule, vk::ShaderModule fragmentShaderModule,
+                      const std::vector<vk::Format>& vertexFormats, const std::map<int, Vulkan::Buffer>& uniforms,
+                      const std::map<int, Vulkan::Texture>& textures, uint32_t subpass, vk::CullModeFlags cullMode) {
+        if (node.mesh)
+            for (auto& primitive : node.mesh->primitives)
+                primitive.drawId =
+                    vulkan->attachShader(vertexShaderModule, fragmentShaderModule, primitive.vertexStrides,
+                                         vertexFormats, uniforms, textures, primitive.mode, subpass, cullMode, false);
+        for (auto& child : node.children)
+            attachShader(child, vertexShaderModule, fragmentShaderModule, vertexFormats, uniforms, textures, subpass,
+                         cullMode);
     }
 
-    virtual void draw() override { model.draw(); }
+    void drawNode(const Node& node) {
+        if (node.mesh)
+            for (auto& primitive : node.mesh->primitives)
+                vulkan->drawIndexed(primitive.drawId, primitive.index, primitive.indexOffset, primitive.indexType,
+                                    (uint32_t)primitive.indexCount, primitive.vertex, primitive.vertexOffset);
+        for (auto& child : node.children) drawNode(child);
+    }
+
+    virtual void attach(uint32_t subpass = 0) override {
+        int i = model.model.defaultScene > -1 ? model.model.defaultScene : 0;
+        for (auto j : model.model.scenes[i].nodes)
+            attachShader(model.nodes[j], vert_shader, frag_shader, vert_formats, uniforms, textures, subpass,
+                         cull_mode);
+
+        vulkan->destroyShaderModule(vert_shader);
+        vulkan->destroyShaderModule(frag_shader);
+    }
+
+    virtual void draw() override {
+        int i = model.model.defaultScene > -1 ? model.model.defaultScene : 0;
+        for (auto j : model.model.scenes[i].nodes) drawNode(model.nodes[j]);
+    }
 
     Model model;
 };

@@ -13,8 +13,8 @@ layout(binding = 1) uniform m_view_t {
 layout(binding = 2) uniform m_model_t {
   mat4 m_model;
 };
-layout(binding = 3) uniform uLightMVP_t {
-  mat4 uLightMVP;
+layout(binding = 3) uniform uLightVP_t {
+  mat4 uLightVP;
 };
 
 layout(location = 0) out vec3 vFragPos;
@@ -30,7 +30,7 @@ void main(void) {
   vFragPos = FragPos.xyz;
   vNormal = normalize((m_model * vec4(aNormalPosition, 1.0)).xyz);
   vTextureCoord = aTextureCoord;
-  vPositionFromLight = biasMat * uLightMVP * vec4(aVertexPosition, 1.0);
+  vPositionFromLight = biasMat * uLightVP * m_model * vec4(aVertexPosition, 1.0);
 
   gl_Position = m_proj * m_view * FragPos;
 }

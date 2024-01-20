@@ -170,6 +170,7 @@ void Model::load(const tinygltf::Mesh& mesh) {
             newPrimitive.baseColorFactor = glm::make_vec4(material.pbrMetallicRoughness.baseColorFactor.data());
             if (material.pbrMetallicRoughness.baseColorTexture.index > -1)
                 newPrimitive.baseColorTexture = &textures[material.pbrMetallicRoughness.baseColorTexture.index];
+            if (material.normalTexture.index > -1) newPrimitive.normalTexture = &textures[material.normalTexture.index];
         }
 
         newMesh.primitives.push_back(newPrimitive);

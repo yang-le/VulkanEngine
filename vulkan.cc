@@ -962,13 +962,14 @@ uint32_t Vulkan::initPipeline(const vk::ShaderModule& vertexShaderModule, const 
     vk::PipelineDepthStencilStateCreateInfo pipelineDepthStencilStateCreateInfo({}, depthBuffered, depthBuffered,
                                                                                 vk::CompareOp::eLessOrEqual);
 
-    vk::PipelineColorBlendAttachmentState pipelineColorBlendAttachmentState(
-        true, vk::BlendFactor::eSrcAlpha, vk::BlendFactor::eOneMinusSrcAlpha, vk::BlendOp::eAdd, vk::BlendFactor::eOne,
-        vk::BlendFactor::eZero, vk::BlendOp::eAdd,
-        vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB |
-            vk::ColorComponentFlagBits::eA);
+    std::vector<vk::PipelineColorBlendAttachmentState> pipelineColorBlendAttachmentStates(
+        renderPassBuilder().subpassDescriptions[subpass].colorAttachmentCount,
+        {true, vk::BlendFactor::eSrcAlpha, vk::BlendFactor::eOneMinusSrcAlpha, vk::BlendOp::eAdd, vk::BlendFactor::eOne,
+         vk::BlendFactor::eZero, vk::BlendOp::eAdd,
+         vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB |
+             vk::ColorComponentFlagBits::eA});
     vk::PipelineColorBlendStateCreateInfo pipelineColorBlendStateCreateInfo({}, false, vk::LogicOp::eNoOp,
-                                                                            pipelineColorBlendAttachmentState);
+                                                                            pipelineColorBlendAttachmentStates);
 
     std::array<vk::DynamicState, 2> dynamicStates = {vk::DynamicState::eViewport, vk::DynamicState::eScissor};
     vk::PipelineDynamicStateCreateInfo pipelineDynamicStateCreateInfo({}, dynamicStates);
@@ -1050,8 +1051,7 @@ void Vulkan::RenderPassBuilder::buildImages(Vulkan& vulkan) {
         images.back().reserve(attachmentDescriptions.size() - 1);
         imageViews.back().reserve(attachmentDescriptions.size() - 1);
 
-        unsigned i;
-        for (i = 1; i < attachmentDescriptions.size() - 1; ++i) {
+        for (unsigned i = 1; i < attachmentDescriptions.size() - 1; ++i) {
             vk::FormatProperties formatProp =
                 vulkan.physicalDevice.getFormatProperties(attachmentDescriptions[i].format);
 
@@ -1101,6 +1101,31 @@ void Vulkan::RenderPassBuilder::buildImages(Vulkan& vulkan) {
                                                                      attachmentDescriptions.back().format,
                                                                      {},
                                                                      {vk::ImageAspectFlagBits::eDepth, 0, 1, 0, 1}});
+            images.back().push_back(image);
+            imageViews.back().push_back(imageView);
+        } else if (attachmentDescriptions.size() > 1) {
+            vk::FormatProperties formatProp =
+                vulkan.physicalDevice.getFormatProperties(attachmentDescriptions.back().format);
+
+            vk::ImageTiling tiling;
+            if (formatProp.optimalTilingFeatures & vk::FormatFeatureFlagBits::eColorAttachment) {
+                tiling = vk::ImageTiling::eOptimal;
+            } else if (formatProp.linearTilingFeatures & vk::FormatFeatureFlagBits::eColorAttachment) {
+                tiling = vk::ImageTiling::eLinear;
+            } else {
+                throw std::runtime_error("ColorAttachment format not supported.");
+            }
+
+            auto image =
+                createImage(vulkan.vmaAllocator, vulkan.imageExtent, attachmentDescriptions.back().format, tiling,
+                            vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eInputAttachment |
+                                vk::ImageUsageFlagBits::eTransientAttachment);
+            vk::ImageView imageView = vulkan.device.createImageView({{},
+                                                                     image.first,
+                                                                     vk::ImageViewType::e2D,
+                                                                     attachmentDescriptions.back().format,
+                                                                     {},
+                                                                     {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}});
             images.back().push_back(image);
             imageViews.back().push_back(imageView);
         }

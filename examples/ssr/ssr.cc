@@ -4,48 +4,33 @@
 
 namespace {
 auto lightPos = glm::vec3(-2, 4, 1);
-auto lightView = glm::lookAt(lightPos, glm::vec3(-1.6, 3.1, 0.8), glm::vec3(1, 0, 0));
+auto lightDir = glm::vec3(0.4, -0.9, -0.2);
+auto lightRadiance = glm::vec3(1, 1, 1);
+
+auto lightView = glm::lookAt(lightPos, lightPos + lightDir, glm::vec3(1, 0, 0));
 auto lightProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, 1e-2f, 100.0f);
 }  // namespace
 
-struct PhongShadow : gltf::PrimitiveShader {
-    PhongShadow(Engine& engine, const std::string& shader_file, gltf::Primitive& primitive, const glm::mat4& modelMat)
-        : engine(engine), gltf::PrimitiveShader(primitive, shader_file, engine) {
+struct SSR : gltf::PrimitiveShader {
+    SSR(Engine& engine, gltf::Primitive& primitive, const glm::mat4& modelMat)
+        : engine(engine), gltf::PrimitiveShader(primitive, "ssr", engine) {
         vert_formats = {vk::Format::eR32G32B32Sfloat, vk::Format::eR32G32B32Sfloat, vk::Format::eR32G32Sfloat};
 
-        write_uniform(2, modelMat);                     // model matrix
-        write_uniform(3, lightProjection * lightView);  // light VP
-    }
-
-    virtual ~PhongShadow() override {
-        // erase texture to avoid double free
-        if (primitive.baseColorTexture) textures.erase(10);
-        textures.erase(11);
+        write_uniform(2, modelMat);  // model matrix
     }
 
     virtual void init() override {
         Shader::init();
 
-        write_uniform(4, primitive.baseColorFactor,
-                      vk::ShaderStageFlagBits::eFragment);  // baseColorFactor
-        write_uniform(5, glm::vec3(0),
-                      vk::ShaderStageFlagBits::eFragment);  // specular
-        write_uniform(6, lightPos,
-                      vk::ShaderStageFlagBits::eFragment);  // light position
-        write_uniform(7, glm::vec3(0),
-                      vk::ShaderStageFlagBits::eFragment);  // camera position
-        write_uniform(8, 1.0f,
-                      vk::ShaderStageFlagBits::eFragment);  // light intensity
-
-        if (primitive.baseColorTexture) textures[10] = *primitive.baseColorTexture;
+        write_uniform(3, -lightDir, vk::ShaderStageFlagBits::eFragment);      // light dir
+        write_uniform(4, glm::vec3(0), vk::ShaderStageFlagBits::eFragment);   // camera pos
+        write_uniform(5, lightRadiance, vk::ShaderStageFlagBits::eFragment);  // light radiance
     }
-
-    virtual void pre_attach() override { textures[11] = engine.get_offscreen_depth_texture(); }
 
     virtual void update() override {
         Shader::update();
 
-        write_uniform(7, engine.get_player().position);
+        write_uniform(4, engine.get_player().position);
     }
 
     Engine& engine;
@@ -69,6 +54,44 @@ struct Shadow : gltf::PrimitiveShader {
     }
 };
 
+struct GBuffer : gltf::PrimitiveShader {
+    GBuffer(Engine& engine, gltf::Primitive& primitive, const glm::mat4& modelMat)
+        : engine(engine), gltf::PrimitiveShader(primitive, "gbuffer", engine) {
+        vert_formats = {vk::Format::eR32G32B32Sfloat, vk::Format::eR32G32B32Sfloat, vk::Format::eR32G32Sfloat};
+
+        write_uniform(2, modelMat);                     // model matrix
+        write_uniform(3, lightProjection * lightView);  // light VP
+    }
+
+    virtual ~GBuffer() override {
+        // erase texture to avoid double free
+        textures.erase(10);
+        textures.erase(12);
+        textures.erase(11);
+    }
+
+    virtual void init() override {
+        Shader::init();
+
+        write_uniform(4, primitive.baseColorFactor,
+                      vk::ShaderStageFlagBits::eFragment);  // baseColorFactor
+
+        if (primitive.baseColorTexture)
+            textures[10] = *primitive.baseColorTexture;
+        else
+            textures[10] = {};
+
+        if (primitive.normalTexture)
+            textures[12] = *primitive.normalTexture;
+        else
+            textures[12] = {};
+    }
+
+    virtual void pre_attach() override { textures[11] = engine.get_offscreen_depth_texture(); }
+
+    Engine& engine;
+};
+
 struct Shadows : MultiShader<2> {
     Shadows(Engine& engine) : engine(engine) {}
     virtual void pre_attach() override {
@@ -84,12 +107,19 @@ struct Shadows : MultiShader<2> {
     Engine& engine;
 };
 
-struct PhongShadows : MultiShader<2> {
-    PhongShadows(Engine& engine) : engine(engine) {}
+struct SSRs : MultiSubpassShader<2> {
+    SSRs(Engine& engine) : engine(engine), MultiSubpassShader<2>(engine.vulkan) {}
 
     virtual void pre_attach() override {
         MultiShader<2>::pre_attach();
-        engine.vulkan.addRenderPass();
+        auto renderPassBuilder = engine.vulkan
+                                     .makeRenderPassBuilder({engine.get_surface_format(), vk::Format::eR8G8B8A8Unorm,
+                                                             vk::Format::eR32Sfloat, vk::Format::eR16G16B16A16Sfloat,
+                                                             vk::Format::eR32Sfloat, vk::Format::eR16G16B16A16Sfloat})
+                                     .addSubpass({0, 1, 2, 3, 4, 5})
+                                     .addSubpass({0}, {1, 2, 3, 4, 5})
+                                     .dependOn(0);
+        engine.vulkan.addRenderPass(renderPassBuilder);
     }
 
     Engine& engine;
@@ -113,14 +143,25 @@ int main(int argc, char* argv[]) {
 
             auto firstPass = std::make_unique<Shadows>(engine);
             firstPass->shaders[0] =
-                std::make_unique<Shadow>(engine, model.meshes[0].primitives[0], model.nodes[0].getMatrix());
-            firstPass->shaders[1] =
                 std::make_unique<Shadow>(engine, model.meshes[1].primitives[0], model.nodes[1].getMatrix());
-            auto secondPass = std::make_unique<PhongShadows>(engine);
-            secondPass->shaders[0] = std::make_unique<PhongShadow>(engine, "floor", model.meshes[0].primitives[0],
-                                                                   model.nodes[0].getMatrix());
-            secondPass->shaders[1] = std::make_unique<PhongShadow>(engine, "marry", model.meshes[1].primitives[0],
-                                                                   model.nodes[1].getMatrix());
+            firstPass->shaders[1] =
+                std::make_unique<Shadow>(engine, model.meshes[0].primitives[0], model.nodes[0].getMatrix());
+
+            auto gbufferSubPass = std::make_unique<MultiShader<2>>();
+            gbufferSubPass->shaders[0] =
+                std::make_unique<GBuffer>(engine, model.meshes[1].primitives[0], model.nodes[1].getMatrix());
+            gbufferSubPass->shaders[1] =
+                std::make_unique<GBuffer>(engine, model.meshes[0].primitives[0], model.nodes[0].getMatrix());
+
+            auto ssrSubPass = std::make_unique<MultiShader<2>>();
+            ssrSubPass->shaders[0] =
+                std::make_unique<SSR>(engine, model.meshes[1].primitives[0], model.nodes[1].getMatrix());
+            ssrSubPass->shaders[1] =
+                std::make_unique<SSR>(engine, model.meshes[0].primitives[0], model.nodes[0].getMatrix());
+
+            auto secondPass = std::make_unique<SSRs>(engine);
+            secondPass->shaders[0] = std::move(gbufferSubPass);
+            secondPass->shaders[1] = std::move(ssrSubPass);
 
             auto mesh = std::make_unique<MultiPassShader<2>>(engine.vulkan);
             mesh->shaders[0] = std::move(firstPass);

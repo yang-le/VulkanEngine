@@ -24,6 +24,7 @@ struct Primitive {
 
     glm::vec4 baseColorFactor;
     Vulkan::Texture* baseColorTexture = nullptr;
+    Vulkan::Texture* normalTexture = nullptr;
 
     vk::PrimitiveTopology mode;
     uint32_t drawId;

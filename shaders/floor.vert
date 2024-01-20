@@ -30,7 +30,7 @@ void main(void) {
   vFragPos = FragPos.xyz;
   vNormal = normalize((m_model * vec4(aNormalPosition, 1.0)).xyz);
   vTextureCoord = aTextureCoord;
-  vPositionFromLight = biasMat * uLightVP * m_model * vec4(aVertexPosition, 1.0);
+  vPositionFromLight = biasMat * uLightVP * FragPos;
 
   gl_Position = m_proj * m_view * FragPos;
 }

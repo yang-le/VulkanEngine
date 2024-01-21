@@ -27,7 +27,9 @@ class Engine {
 
     Player& get_player() { return *player; }
     Scene& get_scene() { return *scene; }
-    Vulkan::Texture& get_offscreen_color_texture() { return *vulkan.renderPassBuilder().offscreenColorTexture; }
+    Vulkan::Texture& get_offscreen_color_texture(size_t i) {
+        return *vulkan.renderPassBuilder().offscreenColorTextures[i];
+    }
     Vulkan::Texture& get_offscreen_depth_texture() { return *vulkan.renderPassBuilder().offscreenDepthTexture; }
     bool get_key_state(size_t key) const { return key_state[key]; }
     float get_time() const { return std::chrono::duration_cast<std::chrono::duration<float>>(t - start_time).count(); }

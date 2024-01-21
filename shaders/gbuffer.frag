@@ -15,12 +15,11 @@ layout(binding = 10) uniform sampler2D uSampler;
 layout(binding = 11) uniform sampler2D uShadowMap;
 layout(binding = 12) uniform sampler2D uSamplerNormal;
 
-layout(location = 0) out vec4 fragColor;
-layout(location = 1) out vec4 outColor;
-layout(location = 2) out float outDepth;
-layout(location = 3) out vec4 outNormal;
-layout(location = 4) out float outShadow;
-layout(location = 5) out vec4 outPos;
+layout(location = 0) out vec4 outColor;
+layout(location = 1) out float outDepth;
+layout(location = 2) out vec4 outNormal;
+layout(location = 3) out float outShadow;
+layout(location = 4) out vec4 outPos;
 
 void LocalBasis(vec3 n, out vec3 b1, out vec3 b2) {
     float sign_ = sign(n.z);
@@ -50,11 +49,10 @@ void main(void) {
     // float visibility = PCF(uShadowMap, vPositionFromLight / vPositionFromLight.w, FILTER_SIZE);
     outShadow = PCSS(uShadowMap, vPositionFromLight / vPositionFromLight.w);
 
-    fragColor = texture(uSampler, vTextureCoord);
-    if(fragColor == vec4(0))
-        fragColor = vec4(uKd, 1.0);
+    outColor = texture(uSampler, vTextureCoord);
+    if(outColor == vec4(0))
+        outColor = vec4(uKd, 1.0);
 
-    outColor = fragColor;
     outDepth = vDepth;
     outNormal = vec4(ApplyTangentNormalMap(), 1.0);
     outPos = vec4(vFragPos, 1.0);

@@ -892,11 +892,17 @@ void Vulkan::initFrameBuffers() {
 
     framebuffers().reserve(swapChainImageViews.size());
     for (unsigned j = 0; j < swapChainImageViews.size(); ++j) {
-        attachments[0] = swapChainImageViews[j];
-        for (unsigned i = 0; i < renderPassBuilder().attachmentDescriptions.size() - 1; ++i)
-            attachments[1 + i] = renderPassBuilder().imageViews[j][i];
-
-        if (renderPassBuilder().offscreenColor) attachments.front() = renderPassBuilder().offscreenColorTexture->view;
+        if (renderPassBuilder().offscreenColor) {
+            unsigned i = 0;
+            for (auto offscreenColorTexture : renderPassBuilder().offscreenColorTextures)
+                attachments[i++] = offscreenColorTexture->view;
+            if (isDepthFormat(renderPassBuilder().attachmentDescriptions.back().format))
+                attachments.back() = renderPassBuilder().imageViews[j].back();
+        } else {
+            attachments[0] = swapChainImageViews[j];
+            for (unsigned i = 0; i < renderPassBuilder().attachmentDescriptions.size() - 1; ++i)
+                attachments[1 + i] = renderPassBuilder().imageViews[j][i];
+        }
         if (renderPassBuilder().offscreenDepth) attachments.back() = renderPassBuilder().offscreenDepthTexture->view;
         framebuffers().push_back(device.createFramebuffer(framebufferCreateInfo));
     }
@@ -1051,6 +1057,11 @@ void Vulkan::RenderPassBuilder::buildImages(Vulkan& vulkan) {
         images.back().reserve(attachmentDescriptions.size() - 1);
         imageViews.back().reserve(attachmentDescriptions.size() - 1);
 
+        auto colorUsage =
+            vk::ImageUsageFlagBits::eColorAttachment |
+            (offscreenColor ? vk::ImageUsageFlagBits::eSampled
+                            : vk::ImageUsageFlagBits::eInputAttachment | vk::ImageUsageFlagBits::eTransientAttachment);
+
         for (unsigned i = 1; i < attachmentDescriptions.size() - 1; ++i) {
             vk::FormatProperties formatProp =
                 vulkan.physicalDevice.getFormatProperties(attachmentDescriptions[i].format);
@@ -1064,10 +1075,8 @@ void Vulkan::RenderPassBuilder::buildImages(Vulkan& vulkan) {
                 throw std::runtime_error("ColorAttachment format not supported.");
             }
 
-            auto image =
-                createImage(vulkan.vmaAllocator, vulkan.imageExtent, attachmentDescriptions[i].format, tiling,
-                            vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eInputAttachment |
-                                vk::ImageUsageFlagBits::eTransientAttachment);
+            auto image = createImage(vulkan.vmaAllocator, vulkan.imageExtent, attachmentDescriptions[i].format, tiling,
+                                     colorUsage);
             vk::ImageView imageView = vulkan.device.createImageView({{},
                                                                      image.first,
                                                                      vk::ImageViewType::e2D,
@@ -1116,10 +1125,8 @@ void Vulkan::RenderPassBuilder::buildImages(Vulkan& vulkan) {
                 throw std::runtime_error("ColorAttachment format not supported.");
             }
 
-            auto image =
-                createImage(vulkan.vmaAllocator, vulkan.imageExtent, attachmentDescriptions.back().format, tiling,
-                            vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eInputAttachment |
-                                vk::ImageUsageFlagBits::eTransientAttachment);
+            auto image = createImage(vulkan.vmaAllocator, vulkan.imageExtent, attachmentDescriptions.back().format,
+                                     tiling, colorUsage);
             vk::ImageView imageView = vulkan.device.createImageView({{},
                                                                      image.first,
                                                                      vk::ImageViewType::e2D,
@@ -1144,7 +1151,7 @@ void Vulkan::RenderPassBuilder::buildImages(Vulkan& vulkan) {
             throw std::runtime_error("ColorAttachment format not supported.");
         }
 
-        offscreenColorTexture = std::make_shared<Texture>();
+        auto offscreenColorTexture = std::make_shared<Texture>();
         offscreenColorTexture->format = attachmentDescriptions.front().format;
         std::tie(offscreenColorTexture->image, offscreenColorTexture->memory) =
             createImage(vulkan.vmaAllocator, vulkan.imageExtent, offscreenColorTexture->format, tiling,
@@ -1156,6 +1163,22 @@ void Vulkan::RenderPassBuilder::buildImages(Vulkan& vulkan) {
                                                                      {},
                                                                      {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}});
         offscreenColorTexture->sampler = vulkan.device.createSampler({});
+
+        auto textureCount =
+            attachmentDescriptions.size() - (isDepthFormat(attachmentDescriptions.back().format) ? 1 : 0);
+        offscreenColorTextures.reserve(textureCount);
+
+        offscreenColorTextures.push_back(offscreenColorTexture);
+
+        for (unsigned i = 1; i < textureCount; ++i) {
+            auto offscreenColorTexture = std::make_shared<Texture>();
+            offscreenColorTexture->format = attachmentDescriptions[i].format;
+            std::tie(offscreenColorTexture->image, offscreenColorTexture->memory) = images.front()[i - 1];
+            offscreenColorTexture->view = imageViews.front()[i - 1];
+            offscreenColorTexture->sampler = vulkan.device.createSampler({});
+
+            offscreenColorTextures.push_back(offscreenColorTexture);
+        }
     }
     if (offscreenDepth) {
         vk::FormatProperties formatProp =
@@ -1242,9 +1265,9 @@ void Vulkan::RenderPassBuilder::destroyImages(const vk::Device& device, const Vm
     images.clear();
 
     if (offscreenColor) {
-        device.destroySampler(offscreenColorTexture->sampler);
-        device.destroyImageView(offscreenColorTexture->view);
-        vmaDestroyImage(vmaAllocator, offscreenColorTexture->image, offscreenColorTexture->memory);
+        device.destroySampler(offscreenColorTextures.front()->sampler);
+        device.destroyImageView(offscreenColorTextures.front()->view);
+        vmaDestroyImage(vmaAllocator, offscreenColorTextures.front()->image, offscreenColorTextures.front()->memory);
     }
     if (offscreenDepth) {
         device.destroySampler(offscreenDepthTexture->sampler);
@@ -1254,7 +1277,12 @@ void Vulkan::RenderPassBuilder::destroyImages(const vk::Device& device, const Vm
 }
 
 vk::RenderPass Vulkan::RenderPassBuilder::build(const vk::Device& device) {
-    if (subpassDescriptions.empty()) addSubpass({0});
+    if (subpassDescriptions.empty()) {
+        if (isDepthFormat(attachmentDescriptions.front().format))
+            addSubpass();
+        else
+            addSubpass({0});
+    }
 
     // This makes sure that writes to the depth image are done before we try to write to it again
     dependencies.emplace_back(
@@ -1309,16 +1337,18 @@ Vulkan::RenderPassBuilder Vulkan::makeRenderPassBuilder(const vk::ArrayProxy<vk:
     while (format != formats.end())
         builder.attachmentDescriptions.emplace_back(
             vk::AttachmentDescriptionFlags{}, *format++, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eClear,
-            vk::AttachmentStoreOp::eDontCare, vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
-            vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal);
+            offscreenColor ? vk::AttachmentStoreOp::eStore : vk::AttachmentStoreOp::eDontCare,
+            vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare, vk::ImageLayout::eUndefined,
+            offscreenColor ? vk::ImageLayout::eShaderReadOnlyOptimal : vk::ImageLayout::eColorAttachmentOptimal);
 
     if (isDepthFormat(formats.back())) {
-        builder.attachmentDescriptions.back().setFinalLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal);
+        auto finalLayout = offscreenDepth ? vk::ImageLayout::eDepthStencilReadOnlyOptimal
+                                          : vk::ImageLayout::eDepthStencilAttachmentOptimal;
+        builder.attachmentDescriptions.back().setInitialLayout(vk::ImageLayout::eUndefined);
+        builder.attachmentDescriptions.back().setFinalLayout(finalLayout);
         if (offscreenDepth) builder.attachmentDescriptions.back().setStoreOp(vk::AttachmentStoreOp::eStore);
-        builder.depthReference =
-            std::make_shared<vk::AttachmentReference>(static_cast<uint32_t>(builder.attachmentDescriptions.size() - 1),
-                                                      offscreenDepth ? vk::ImageLayout::eDepthStencilReadOnlyOptimal
-                                                                     : vk::ImageLayout::eDepthStencilAttachmentOptimal);
+        builder.depthReference = std::make_shared<vk::AttachmentReference>(
+            static_cast<uint32_t>(builder.attachmentDescriptions.size() - 1), finalLayout);
         return builder;
     }
 

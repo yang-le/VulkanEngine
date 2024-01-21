@@ -54,7 +54,7 @@ class Vulkan {
 
         bool offscreenColor;
         bool offscreenDepth;
-        std::shared_ptr<Texture> offscreenColorTexture;
+        std::vector<std::shared_ptr<Texture>> offscreenColorTextures;
         std::shared_ptr<Texture> offscreenDepthTexture;
 
         std::shared_ptr<vk::AttachmentReference> depthReference;

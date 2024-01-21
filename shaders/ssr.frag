@@ -1,11 +1,5 @@
 #version 450
 
-layout(input_attachment_index = 0, set = 1, binding = 0) uniform subpassInput inputColour;
-layout(input_attachment_index = 1, set = 1, binding = 1) uniform subpassInput inputDepth;
-layout(input_attachment_index = 2, set = 1, binding = 2) uniform subpassInput inputNormal;
-layout(input_attachment_index = 3, set = 1, binding = 3) uniform subpassInput inputShadow;
-layout(input_attachment_index = 4, set = 1, binding = 4) uniform subpassInput inputPos;
-
 layout(location = 0) in vec4 vPosWorld;
 layout(location = 1) in mat4 vWorldToScreen;
 
@@ -18,6 +12,11 @@ layout(binding = 4) uniform uCameraPos_t {
 layout(binding = 5) uniform uLightRadiance_t {
     vec3 uLightRadiance;
 };
+layout(binding = 6) uniform sampler2D uGDiffuse;
+layout(binding = 7) uniform sampler2D uGDepth;
+layout(binding = 8) uniform sampler2D uGNormalWorld;
+layout(binding = 9) uniform sampler2D uGShadow;
+layout(binding = 10) uniform sampler2D uGPosWorld;
 
 layout(location = 0) out vec4 outColor;
 
@@ -92,8 +91,31 @@ vec2 GetScreenCoordinate(vec3 posWorld) {
     return uv;
 }
 
-vec3 GetGBufferDiffuse() {
-    vec3 diffuse = subpassLoad(inputColour).rgb;
+float GetGBufferDepth(vec2 uv) {
+    float depth = texture(uGDepth, uv).x;
+    if(depth < 1e-2) {
+        depth = 1000.0;
+    }
+    return depth;
+}
+
+vec3 GetGBufferNormalWorld(vec2 uv) {
+    vec3 normal = texture(uGNormalWorld, uv).xyz;
+    return normal;
+}
+
+vec3 GetGBufferPosWorld(vec2 uv) {
+    vec3 posWorld = texture(uGPosWorld, uv).xyz;
+    return posWorld;
+}
+
+float GetGBufferuShadow(vec2 uv) {
+    float visibility = texture(uGShadow, uv).x;
+    return visibility;
+}
+
+vec3 GetGBufferDiffuse(vec2 uv) {
+    vec3 diffuse = texture(uGDiffuse, uv).xyz;
     diffuse = pow(diffuse, vec3(2.2));
     return diffuse;
 }
@@ -102,25 +124,58 @@ vec3 GetGBufferDiffuse() {
  * Evaluate diffuse bsdf value.
  *
  * wi, wo are all in world space.
+ * uv is in screen space, [0, 1] x [0, 1].
  *
  */
-vec3 EvalDiffuse(vec3 wi, vec3 wo) {
-    vec3 albedo = GetGBufferDiffuse();
-    vec3 normal = subpassLoad(inputNormal).xyz;
+vec3 EvalDiffuse(vec3 wi, vec3 wo, vec2 uv) {
+    vec3 albedo = GetGBufferDiffuse(uv);
+    vec3 normal = GetGBufferNormalWorld(uv);
     return INV_PI * albedo * max(0, dot(normal, wi));
 }
 
 /*
  * Evaluate directional light with shadow map
+ * uv is in screen space, [0, 1] x [0, 1].
  *
  */
-vec3 EvalDirectionalLight() {
-    vec3 Le = subpassLoad(inputShadow).x * uLightRadiance;
+vec3 EvalDirectionalLight(vec2 uv) {
+    vec3 Le = GetGBufferuShadow(uv) * uLightRadiance;
     return Le;
 }
 
 bool RayMarch(vec3 ori, vec3 dir, out vec3 hitPos) {
+    float step = 0.05;
+    const int totalStepTimes = 150;
+
+    vec3 stepDir = normalize(dir) * step;
+    vec3 curPos = ori;
+    for(int curStepTimes = 0; curStepTimes < totalStepTimes; curStepTimes++) {
+        vec2 screenUV = GetScreenCoordinate(curPos);
+        float rayDepth = GetDepth(curPos);
+        float gBufferDepth = GetGBufferDepth(screenUV);
+
+        if(rayDepth - gBufferDepth > 0.0001) {
+            hitPos = curPos;
+            return true;
+        }
+
+        curPos += stepDir;
+    }
+
     return false;
+}
+
+// test Screen Space Ray Tracing
+vec3 EvalReflect(vec3 wi, vec3 wo, vec2 uv) {
+    vec3 worldNormal = GetGBufferNormalWorld(uv);
+    vec3 relfectDir = normalize(reflect(-wo, worldNormal));
+    vec3 hitPos;
+    if(RayMarch(vPosWorld.xyz, relfectDir, hitPos)) {
+        vec2 screenUV = GetScreenCoordinate(hitPos);
+        return GetGBufferDiffuse(screenUV);
+    } else {
+        return vec3(0.);
+    }
 }
 
 #define SAMPLE_NUM 1
@@ -128,10 +183,36 @@ bool RayMarch(vec3 ori, vec3 dir, out vec3 hitPos) {
 void main() {
     float s = InitRand(gl_FragCoord.xy);
 
+    vec3 worldPos = vPosWorld.xyz;
+    vec2 screenUV = GetScreenCoordinate(worldPos);
     vec3 wi = normalize(uLightDir);
-    vec3 wo = normalize(uCameraPos - vPosWorld.xyz);
+    vec3 wo = normalize(uCameraPos - worldPos);
 
-    vec3 L = EvalDiffuse(wi, wo) * EvalDirectionalLight();
+    vec3 L = EvalDiffuse(wi, wo, screenUV) * EvalDirectionalLight(screenUV);
+
+    // test Screen Space Ray Tracing
+    // vec3 L = (GetGBufferDiffuse(screenUV) + EvalReflect(wi, wo, screenUV)) / 2.;
+
+    vec3 L_ind = vec3(0);
+    for(int i = 0; i < SAMPLE_NUM; ++i) {
+        float pdf;
+        vec3 localDir = SampleHemisphereCos(s, pdf);
+        vec3 normal = GetGBufferNormalWorld(screenUV);
+        vec3 b1, b2;
+        LocalBasis(normal, b1, b2);
+        vec3 dir = normalize(mat3(b1, b2, normal) * localDir);
+
+        vec3 position_1;
+        if(RayMarch(worldPos, dir, position_1)) {
+            vec2 hitScreenUV = GetScreenCoordinate(position_1);
+            L_ind += EvalDiffuse(dir, wo, screenUV) / pdf * EvalDiffuse(wi, dir, hitScreenUV) * EvalDirectionalLight(hitScreenUV);
+        }
+    }
+
+    L_ind /= SAMPLE_NUM;
+
+    L += L_ind;
+
     vec3 color = pow(clamp(L, vec3(0.0), vec3(1.0)), vec3(1.0 / 2.2));
     outColor = vec4(color, 1.0);
 }

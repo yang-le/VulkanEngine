@@ -75,12 +75,7 @@ template <size_t N>
 struct Shadows : MultiShader<N> {
     Shadows(Engine& engine) : engine(engine) {}
     virtual void pre_attach() override {
-        vk::AttachmentDescription depthAttachment(
-            {}, vk::Format::eD16Unorm, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eClear,
-            vk::AttachmentStoreOp::eStore, vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
-            vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthStencilReadOnlyOptimal);
-        auto renderPassBuilder = engine.vulkan.makeRenderPassBuilder(depthAttachment, 0).addSubpass();
-        renderPassBuilder.offscreenDepth = true;
+        auto renderPassBuilder = engine.vulkan.makeRenderPassBuilder(vk::Format::eD16Unorm, false, false, true);
         engine.vulkan.addRenderPass(renderPassBuilder);
     }
 

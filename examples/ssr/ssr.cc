@@ -19,12 +19,29 @@ struct SSR : gltf::PrimitiveShader {
         write_uniform(2, modelMat);  // model matrix
     }
 
+    virtual ~SSR() override {
+        // erase texture to avoid double free
+        textures.erase(6);
+        textures.erase(7);
+        textures.erase(8);
+        textures.erase(9);
+        textures.erase(10);
+    }
+
     virtual void init() override {
         Shader::init();
 
         write_uniform(3, -lightDir, vk::ShaderStageFlagBits::eFragment);      // light dir
         write_uniform(4, glm::vec3(0), vk::ShaderStageFlagBits::eFragment);   // camera pos
         write_uniform(5, lightRadiance, vk::ShaderStageFlagBits::eFragment);  // light radiance
+    }
+
+    virtual void pre_attach() override {
+        textures[6] = engine.get_offscreen_color_texture(0);
+        textures[7] = engine.get_offscreen_color_texture(1);
+        textures[8] = engine.get_offscreen_color_texture(2);
+        textures[9] = engine.get_offscreen_color_texture(3);
+        textures[10] = engine.get_offscreen_color_texture(4);
     }
 
     virtual void update() override {
@@ -92,34 +109,37 @@ struct GBuffer : gltf::PrimitiveShader {
     Engine& engine;
 };
 
-struct Shadows : MultiShader<2> {
+struct Shadows : MultiShader<12> {
     Shadows(Engine& engine) : engine(engine) {}
     virtual void pre_attach() override {
-        vk::AttachmentDescription depthAttachment(
-            {}, vk::Format::eD16Unorm, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eClear,
-            vk::AttachmentStoreOp::eStore, vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
-            vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthStencilReadOnlyOptimal);
-        auto renderPassBuilder = engine.vulkan.makeRenderPassBuilder(depthAttachment, 0).addSubpass();
-        renderPassBuilder.offscreenDepth = true;
+        auto renderPassBuilder = engine.vulkan.makeRenderPassBuilder(vk::Format::eD16Unorm, false, false, true);
         engine.vulkan.addRenderPass(renderPassBuilder);
     }
 
     Engine& engine;
 };
 
-struct SSRs : MultiSubpassShader<2> {
-    SSRs(Engine& engine) : engine(engine), MultiSubpassShader<2>(engine.vulkan) {}
-
+struct GBuffers : MultiShader<12> {
+    GBuffers(Engine& engine) : engine(engine) {}
     virtual void pre_attach() override {
-        MultiShader<2>::pre_attach();
+        MultiShader<12>::pre_attach();
         auto renderPassBuilder = engine.vulkan
-                                     .makeRenderPassBuilder({engine.get_surface_format(), vk::Format::eR8G8B8A8Unorm,
-                                                             vk::Format::eR32Sfloat, vk::Format::eR16G16B16A16Sfloat,
-                                                             vk::Format::eR32Sfloat, vk::Format::eR16G16B16A16Sfloat})
-                                     .addSubpass({0, 1, 2, 3, 4, 5})
-                                     .addSubpass({0}, {1, 2, 3, 4, 5})
-                                     .dependOn(0);
+                                     .makeRenderPassBuilder({engine.get_surface_format(), vk::Format::eR32Sfloat,
+                                                             vk::Format::eR16G16B16A16Sfloat, vk::Format::eR32Sfloat,
+                                                             vk::Format::eR16G16B16A16Sfloat},
+                                                            false, true)
+                                     .addSubpass({0, 1, 2, 3, 4});
         engine.vulkan.addRenderPass(renderPassBuilder);
+    }
+
+    Engine& engine;
+};
+
+struct SSRs : MultiShader<12> {
+    SSRs(Engine& engine) : engine(engine) {}
+    virtual void pre_attach() override {
+        MultiShader<12>::pre_attach();
+        engine.vulkan.addRenderPass();
     }
 
     Engine& engine;
@@ -131,41 +151,35 @@ int main(int argc, char* argv[]) {
         int xpos = -1, ypos = -1;
 
         for (;;) {
-            Engine engine(width, height, 2);
+            Engine engine(width, height, 3);
             if (xpos != -1 && ypos != -1) engine.set_window_pos(xpos, ypos);
 
             auto player = std::make_unique<Player>(engine, glm::radians(75.0f), 1600.0 / 900.0, 1e-3, 1000);
             player->position = {6, 1, 0};
             engine.set_player(std::move(player));
 
-            gltf::Model model(&engine.vulkan, "assets/cube/cube1.gltf");
+            gltf::Model model(&engine.vulkan, "assets/cave/cave.gltf");
             model.load();
 
-            auto firstPass = std::make_unique<Shadows>(engine);
-            firstPass->shaders[0] =
-                std::make_unique<Shadow>(engine, model.meshes[1].primitives[0], model.nodes[1].getMatrix());
-            firstPass->shaders[1] =
-                std::make_unique<Shadow>(engine, model.meshes[0].primitives[0], model.nodes[0].getMatrix());
+            auto shadowPass = std::make_unique<Shadows>(engine);
+            for (unsigned i = 0; i < shadowPass->shaders.size(); ++i)
+                shadowPass->shaders[i] =
+                    std::make_unique<Shadow>(engine, model.meshes[i].primitives[0], model.nodes[i + 2].getMatrix());
 
-            auto gbufferSubPass = std::make_unique<MultiShader<2>>();
-            gbufferSubPass->shaders[0] =
-                std::make_unique<GBuffer>(engine, model.meshes[1].primitives[0], model.nodes[1].getMatrix());
-            gbufferSubPass->shaders[1] =
-                std::make_unique<GBuffer>(engine, model.meshes[0].primitives[0], model.nodes[0].getMatrix());
+            auto gbufferPass = std::make_unique<GBuffers>(engine);
+            for (unsigned i = 0; i < gbufferPass->shaders.size(); ++i)
+                gbufferPass->shaders[i] =
+                    std::make_unique<GBuffer>(engine, model.meshes[i].primitives[0], model.nodes[i + 2].getMatrix());
 
-            auto ssrSubPass = std::make_unique<MultiShader<2>>();
-            ssrSubPass->shaders[0] =
-                std::make_unique<SSR>(engine, model.meshes[1].primitives[0], model.nodes[1].getMatrix());
-            ssrSubPass->shaders[1] =
-                std::make_unique<SSR>(engine, model.meshes[0].primitives[0], model.nodes[0].getMatrix());
+            auto ssrPass = std::make_unique<SSRs>(engine);
+            for (unsigned i = 0; i < ssrPass->shaders.size(); ++i)
+                ssrPass->shaders[i] =
+                    std::make_unique<SSR>(engine, model.meshes[i].primitives[0], model.nodes[i + 2].getMatrix());
 
-            auto secondPass = std::make_unique<SSRs>(engine);
-            secondPass->shaders[0] = std::move(gbufferSubPass);
-            secondPass->shaders[1] = std::move(ssrSubPass);
-
-            auto mesh = std::make_unique<MultiPassShader<2>>(engine.vulkan);
-            mesh->shaders[0] = std::move(firstPass);
-            mesh->shaders[1] = std::move(secondPass);
+            auto mesh = std::make_unique<MultiPassShader<3>>(engine.vulkan);
+            mesh->shaders[0] = std::move(shadowPass);
+            mesh->shaders[1] = std::move(gbufferPass);
+            mesh->shaders[2] = std::move(ssrPass);
             engine.add_mesh(std::move(mesh));
 
             engine.quit_on_resize = true;

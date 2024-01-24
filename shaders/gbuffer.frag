@@ -45,8 +45,8 @@ vec3 ApplyTangentNormalMap() {
 #include "shadow.glsl"
 
 void main(void) {
-    // float visibility = useShadowMap(uShadowMap, vPositionFromLight / vPositionFromLight.w);
-    // float visibility = PCF(uShadowMap, vPositionFromLight / vPositionFromLight.w, FILTER_SIZE);
+    // outShadow = useShadowMap(uShadowMap, vPositionFromLight / vPositionFromLight.w);
+    // outShadow = PCF(uShadowMap, vPositionFromLight / vPositionFromLight.w, FILTER_SIZE);
     outShadow = PCSS(uShadowMap, vPositionFromLight / vPositionFromLight.w);
 
     outColor = texture(uSampler, vTextureCoord);

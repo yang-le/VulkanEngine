@@ -115,5 +115,5 @@ float PCSS(sampler2D shadowMap, vec4 coords) {
 
 float useShadowMap(sampler2D shadowMap, vec4 shadowCoord) {
     float depth = texture(shadowMap, shadowCoord.st).r;
-    return (shadowCoord.z > depth + EPS) ? 0.1 : 1.0;
+    return (shadowCoord.z > depth + EPS) ? 0.0 : 1.0;
 }

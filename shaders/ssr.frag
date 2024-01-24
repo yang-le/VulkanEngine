@@ -1,6 +1,6 @@
 #version 450
 
-layout(location = 0) in vec4 vPosWorld;
+layout(location = 0) in vec2 vScreenUV;
 layout(location = 1) in mat4 vWorldToScreen;
 
 layout(binding = 3) uniform uLightDir_t {
@@ -167,10 +167,11 @@ bool RayMarch(vec3 ori, vec3 dir, out vec3 hitPos) {
 
 // test Screen Space Ray Tracing
 vec3 EvalReflect(vec3 wi, vec3 wo, vec2 uv) {
+    vec3 worldPos = GetGBufferPosWorld(uv);
     vec3 worldNormal = GetGBufferNormalWorld(uv);
     vec3 relfectDir = normalize(reflect(-wo, worldNormal));
     vec3 hitPos;
-    if(RayMarch(vPosWorld.xyz, relfectDir, hitPos)) {
+    if(RayMarch(worldPos, relfectDir, hitPos)) {
         vec2 screenUV = GetScreenCoordinate(hitPos);
         return GetGBufferDiffuse(screenUV);
     } else {
@@ -183,12 +184,11 @@ vec3 EvalReflect(vec3 wi, vec3 wo, vec2 uv) {
 void main() {
     float s = InitRand(gl_FragCoord.xy);
 
-    vec3 worldPos = vPosWorld.xyz;
-    vec2 screenUV = GetScreenCoordinate(worldPos);
+    vec3 worldPos = GetGBufferPosWorld(vScreenUV);
     vec3 wi = normalize(uLightDir);
     vec3 wo = normalize(uCameraPos - worldPos);
 
-    vec3 L = EvalDiffuse(wi, wo, screenUV) * EvalDirectionalLight(screenUV);
+    vec3 L = EvalDiffuse(wi, wo, vScreenUV) * EvalDirectionalLight(vScreenUV);
 
     // test Screen Space Ray Tracing
     // vec3 L = (GetGBufferDiffuse(screenUV) + EvalReflect(wi, wo, screenUV)) / 2.;
@@ -197,7 +197,7 @@ void main() {
     for(int i = 0; i < SAMPLE_NUM; ++i) {
         float pdf;
         vec3 localDir = SampleHemisphereCos(s, pdf);
-        vec3 normal = GetGBufferNormalWorld(screenUV);
+        vec3 normal = GetGBufferNormalWorld(vScreenUV);
         vec3 b1, b2;
         LocalBasis(normal, b1, b2);
         vec3 dir = normalize(mat3(b1, b2, normal) * localDir);
@@ -205,7 +205,7 @@ void main() {
         vec3 position_1;
         if(RayMarch(worldPos, dir, position_1)) {
             vec2 hitScreenUV = GetScreenCoordinate(position_1);
-            L_ind += EvalDiffuse(dir, wo, screenUV) / pdf * EvalDiffuse(wi, dir, hitScreenUV) * EvalDirectionalLight(hitScreenUV);
+            L_ind += EvalDiffuse(dir, wo, vScreenUV) / pdf * EvalDiffuse(wi, dir, hitScreenUV) * EvalDirectionalLight(hitScreenUV);
         }
     }
 

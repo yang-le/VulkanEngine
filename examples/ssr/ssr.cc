@@ -9,6 +9,9 @@ auto lightRadiance = glm::vec3(20);
 
 auto lightView = glm::lookAt(lightPos, lightPos + lightDir, glm::vec3(1, 0, 0));
 auto lightProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, 1e-2f, 100.0f);
+
+int shadowMode = 2;
+int sampleNum = 8;
 }  // namespace
 
 struct SSR : Shader {
@@ -33,6 +36,7 @@ struct SSR : Shader {
         write_uniform(3, -lightDir, vk::ShaderStageFlagBits::eFragment);      // light dir
         write_uniform(4, glm::vec3(0), vk::ShaderStageFlagBits::eFragment);   // camera pos
         write_uniform(5, lightRadiance, vk::ShaderStageFlagBits::eFragment);  // light radiance
+        write_uniform(12, sampleNum, vk::ShaderStageFlagBits::eFragment);
     }
 
     virtual void pre_attach() override {
@@ -48,6 +52,7 @@ struct SSR : Shader {
         Shader::update();
 
         write_uniform(4, engine.get_player().position);
+        write_uniform(12, sampleNum);
     }
 
     Engine& engine;
@@ -90,8 +95,8 @@ struct GBuffer : gltf::PrimitiveShader {
     virtual void init() override {
         Shader::init();
 
-        write_uniform(4, primitive.baseColorFactor,
-                      vk::ShaderStageFlagBits::eFragment);  // baseColorFactor
+        write_uniform(4, primitive.baseColorFactor, vk::ShaderStageFlagBits::eFragment);
+        write_uniform(5, shadowMode, vk::ShaderStageFlagBits::eFragment);
 
         if (primitive.baseColorTexture)
             textures[10] = *primitive.baseColorTexture;
@@ -105,6 +110,11 @@ struct GBuffer : gltf::PrimitiveShader {
     }
 
     virtual void pre_attach() override { textures[11] = engine.get_offscreen_depth_texture(); }
+
+    virtual void update() override {
+        gltf::PrimitiveShader::update();
+        write_uniform(5, shadowMode);
+    }
 
     Engine& engine;
 };
@@ -133,6 +143,18 @@ struct GBuffers : MultiShader<12> {
     }
 
     Engine& engine;
+};
+
+struct SSRGui : Gui {
+    SSRGui() : Gui("SSR") {}
+    virtual void gui_draw() override {
+        ImGui::RadioButton("ShadowMap", &shadowMode, 0);
+        ImGui::SameLine();
+        ImGui::RadioButton("PCF", &shadowMode, 1);
+        ImGui::SameLine();
+        ImGui::RadioButton("PCSS", &shadowMode, 2);
+        ImGui::SliderInt("Sample Num", &sampleNum, 1, 32);
+    }
 };
 
 int main(int argc, char* argv[]) {
@@ -166,6 +188,8 @@ int main(int argc, char* argv[]) {
             mesh->shaders[1] = std::move(gbufferPass);
             mesh->shaders[2] = std::make_unique<SSR>(engine);
             engine.add_mesh(std::move(mesh));
+
+            engine.add_gui(std::make_unique<SSRGui>());
 
             engine.quit_on_resize = true;
             engine.run();

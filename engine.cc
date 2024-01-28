@@ -94,6 +94,9 @@ Engine::Engine(int width, int height, uint32_t renderPassCount) : width(width), 
     ImGui::CreateContext();
     ImGui_ImplGlfw_InitForVulkan(window, true);
 
+    gui_context = ImGui::GetCurrentContext();
+    ImGui::GetAllocatorFunctions(&gui_alloc_func, &gui_free_func, &gui_user_data);
+
     add_gui(std::make_unique<EngineGui>(*this));
 }
 

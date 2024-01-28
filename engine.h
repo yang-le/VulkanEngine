@@ -19,7 +19,13 @@ class Engine {
     void run();
 
     void add_mesh(std::unique_ptr<IShader> mesh) { scene->add_mesh(std::move(mesh)); }
-    void add_gui(std::unique_ptr<Gui> gui) { guis.push_back(std::move(gui)); }
+    void add_gui(std::unique_ptr<Gui> gui) {
+        if (ImGui::GetCurrentContext() != gui_context) {
+            ImGui::SetCurrentContext(gui_context);
+            ImGui::SetAllocatorFunctions(gui_alloc_func, gui_free_func, gui_user_data);
+        }
+        guis.push_back(std::move(gui));
+    }
     void set_player(std::unique_ptr<Player> player) { this->player = std::move(player); }
     void set_scene(std::unique_ptr<Scene> scene) { this->scene = std::move(scene); }
     void set_bg_color(const vk::ClearColorValue& color) { vulkan.bgColor = color; }
@@ -84,4 +90,9 @@ class Engine {
     std::unique_ptr<Scene> scene;
     std::unique_ptr<Player> player;
     std::vector<std::unique_ptr<Gui>> guis;
+
+    ImGuiContext* gui_context;
+    ImGuiMemAllocFunc gui_alloc_func;
+    ImGuiMemFreeFunc gui_free_func;
+    void* gui_user_data;
 };

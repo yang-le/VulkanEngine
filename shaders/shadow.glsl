@@ -1,7 +1,7 @@
 // Random
 
 // Shadow map related variables
-#define NUM_SAMPLES 20
+#define NUM_SAMPLES 32
 #define BLOCKER_SEARCH_NUM_SAMPLES NUM_SAMPLES
 #define PCF_NUM_SAMPLES NUM_SAMPLES
 #define NUM_RINGS 10

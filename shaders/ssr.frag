@@ -18,6 +18,10 @@ layout(binding = 8) uniform sampler2D uGNormalWorld;
 layout(binding = 9) uniform sampler2D uGShadow;
 layout(binding = 10) uniform sampler2D uGPosWorld;
 
+layout(binding = 12) uniform uSampleNum_t {
+    int uSampleNum;
+};
+
 layout(location = 0) out vec4 outColor;
 
 #define M_PI 3.1415926535897932384626433832795
@@ -143,7 +147,7 @@ vec3 EvalDirectionalLight(vec2 uv) {
     return Le;
 }
 
-bool RayMarch(vec3 ori, vec3 dir, out vec3 hitPos) {
+bool RayMarch0(vec3 ori, vec3 dir, out vec3 hitPos) {
     float step = 0.05;
     const int totalStepTimes = 150;
 
@@ -165,6 +169,39 @@ bool RayMarch(vec3 ori, vec3 dir, out vec3 hitPos) {
     return false;
 }
 
+bool RayMarch(vec3 ori, vec3 dir, out vec3 hitPos) {
+    const float EPS = 5e-2;
+    const float threshold = 0.1;
+    const int totalStepTimes = 20;
+
+    float step = 0.8;   // initial step
+    vec3 curPos = ori;
+    for(int i = 0; i < totalStepTimes; i++) {
+        vec3 nextPos = curPos + dir * step;
+        vec2 uvScreen = GetScreenCoordinate(curPos);
+
+        if(all(bvec4(lessThanEqual(vec2(0.0), uvScreen), lessThanEqual(uvScreen, vec2(1.0)))) &&
+            GetDepth(nextPos) < GetGBufferDepth(GetScreenCoordinate(nextPos))) {
+            curPos += dir * step;
+            continue;
+        }
+
+        if(step < EPS) {
+            float s1 = GetGBufferDepth(GetScreenCoordinate(curPos)) - GetDepth(curPos) + EPS;
+            float s2 = GetDepth(nextPos) - GetGBufferDepth(GetScreenCoordinate(nextPos)) + EPS;
+            if(s1 < threshold && s2 < threshold) {
+                hitPos = curPos + 2 * dir * step * s1 / (s1 + s2);
+                return true;
+            }
+            break;
+        }
+
+        step *= 0.5;
+    }
+
+    return false;
+}
+
 // test Screen Space Ray Tracing
 vec3 EvalReflect(vec3 wi, vec3 wo, vec2 uv) {
     vec3 worldPos = GetGBufferPosWorld(uv);
@@ -179,7 +216,7 @@ vec3 EvalReflect(vec3 wi, vec3 wo, vec2 uv) {
     }
 }
 
-#define SAMPLE_NUM 1
+#define SAMPLE_NUM uSampleNum
 
 void main() {
     float s = InitRand(gl_FragCoord.xy);
@@ -193,13 +230,14 @@ void main() {
     // test Screen Space Ray Tracing
     // vec3 L = (GetGBufferDiffuse(screenUV) + EvalReflect(wi, wo, screenUV)) / 2.;
 
+    vec3 b1, b2;
+    vec3 normal = GetGBufferNormalWorld(vScreenUV);
+    LocalBasis(normal, b1, b2);
+
     vec3 L_ind = vec3(0);
     for(int i = 0; i < SAMPLE_NUM; ++i) {
         float pdf;
         vec3 localDir = SampleHemisphereCos(s, pdf);
-        vec3 normal = GetGBufferNormalWorld(vScreenUV);
-        vec3 b1, b2;
-        LocalBasis(normal, b1, b2);
         vec3 dir = normalize(mat3(b1, b2, normal) * localDir);
 
         vec3 position_1;

@@ -11,6 +11,11 @@ layout(location = 4) in float vDepth;
 layout(binding = 4) uniform uKd_t {
     vec3 uKd;
 };
+
+layout(binding = 5) uniform uShadowMode_t {
+    int uShadowMode;
+};
+
 layout(binding = 10) uniform sampler2D uSampler;
 layout(binding = 11) uniform sampler2D uShadowMap;
 layout(binding = 12) uniform sampler2D uSamplerNormal;
@@ -45,9 +50,12 @@ vec3 ApplyTangentNormalMap() {
 #include "shadow.glsl"
 
 void main(void) {
-    // outShadow = useShadowMap(uShadowMap, vPositionFromLight / vPositionFromLight.w);
-    // outShadow = PCF(uShadowMap, vPositionFromLight / vPositionFromLight.w, FILTER_SIZE);
-    outShadow = PCSS(uShadowMap, vPositionFromLight / vPositionFromLight.w);
+    if(uShadowMode == 0)
+        outShadow = useShadowMap(uShadowMap, vPositionFromLight / vPositionFromLight.w);
+    else if(uShadowMode == 1)
+        outShadow = PCF(uShadowMap, vPositionFromLight / vPositionFromLight.w, FILTER_SIZE);
+    else
+        outShadow = PCSS(uShadowMap, vPositionFromLight / vPositionFromLight.w);
 
     outColor = texture(uSampler, vTextureCoord);
     if(outColor == vec4(0))

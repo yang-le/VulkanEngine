@@ -128,7 +128,6 @@ void Model::load(Node* parent, const tinygltf::Node& node) {
     if (parent) {
         parent->children.push_back(newNode);
         for (auto i : node.children) load(&parent->children.back(), model.nodes[i]);
-
     } else {
         nodes.push_back(newNode);
         for (auto i : node.children) load(&nodes.back(), model.nodes[i]);

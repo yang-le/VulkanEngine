@@ -10,15 +10,16 @@ auto lightRadiance = glm::vec3(1);
 auto lightView = glm::lookAt(lightPos, lightPos + lightDir, glm::vec3(1, 0, 0));
 auto lightProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, 1e-2f, 1000.0f);
 
-auto rotate = glm::rotate(glm::mat4(1), glm::pi<float>(), glm::vec3(0, 1, 0));
+auto transform = glm::scale(glm::rotate(glm::mat4(1), glm::pi<float>(), glm::vec3(0, 1, 0)), glm::vec3(2));
 }  // namespace
 
 struct Mesh : gltf::PrimitiveShader {
-    Mesh(Engine& engine, gltf::Primitive& primitive, const glm::mat4& modelMat, float offset, float roughness)
-        : engine(engine), gltf::PrimitiveShader(primitive, "pbr", engine) {
+    Mesh(Engine& engine, gltf::Primitive& primitive, const std::string& name, const glm::mat4& modelMat,
+         const glm::vec3& offset, float roughness)
+        : engine(engine), gltf::PrimitiveShader(primitive, name, engine) {
         vert_formats = {vk::Format::eR32G32B32Sfloat, vk::Format::eR32G32B32Sfloat, vk::Format::eR32G32Sfloat};
 
-        write_uniform(2, glm::translate(rotate, glm::vec3(offset, 60, 0)) * modelMat);  // model matrix
+        write_uniform(2, glm::translate(glm::mat4(1), offset) * transform * modelMat);  // model matrix
         write_uniform(9, roughness,
                       vk::ShaderStageFlagBits::eFragment);  // roughness
     }
@@ -37,7 +38,9 @@ struct Mesh : gltf::PrimitiveShader {
         write_uniform(8, 1.0f,
                       vk::ShaderStageFlagBits::eFragment);  // metallic
 
-        write_texture(11, "GGX_E_LUT.png");  // BRDFLut
+        textures[10] = Vulkan::Texture();       // AlbedoMap
+        write_texture(11, "GGX_E_LUT.png");     // BRDFLut
+        write_texture(12, "GGX_Eavg_LUT.png");  // EavgLut
     }
 
     virtual void update() override {
@@ -61,9 +64,15 @@ int main(int argc, char* argv[]) {
         gltf::Model model(&engine.vulkan, "assets/ball.gltf");
         model.load();
 
-        for (unsigned i = 0; i < 4; ++i)
-            engine.add_mesh(std::make_unique<Mesh>(engine, model.meshes[i].primitives[0],
-                                                   model.nodes[0].children[i].getMatrix(), 180, 0.35));
+        for (unsigned j = 0; j < 5; ++j)
+            for (unsigned i = 0; i < 4; ++i) {
+                engine.add_mesh(std::make_unique<Mesh>(engine, model.meshes[i].primitives[0], "KullaConty",
+                                                       model.nodes[0].children[i].getMatrix(),
+                                                       glm::vec3(180 - j * 80.0f, 60, 0), 0.15 + j * 0.2));
+                engine.add_mesh(std::make_unique<Mesh>(engine, model.meshes[i].primitives[0], "pbr",
+                                                       model.nodes[0].children[i].getMatrix(),
+                                                       glm::vec3(180 - j * 80.0f, -60, 0), 0.15 + j * 0.2));
+            }
 
         engine.vulkan.addRenderPass();
 

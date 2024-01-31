@@ -65,6 +65,29 @@ vec3 fresnelSchlick(vec3 F0, vec3 V, vec3 H) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - max(dot(H, V), 0.0), 0.0, 1.0), 5.0);
 }
 
+//https://blog.selfshadow.com/publications/s2017-shading-course/imageworks/s2017_pbs_imageworks_slides_v2.pdf
+vec3 AverageFresnel(vec3 r, vec3 g) {
+    return vec3(0.087237) + 0.0230685 * g - 0.0864902 * g * g + 0.0774594 * g * g * g + 0.782654 * r - 0.136432 * r * r + 0.278708 * r * r * r + 0.19744 * g * r + 0.0360605 * g * g * r - 0.2586 * g * r * r;
+}
+
+vec3 MultiScatterBRDF(float NdotL, float NdotV) {
+    vec3 albedo = pow(texture(uAlbedoMap, vTextureCoord).rgb, vec3(2.2));
+
+    vec3 E_o = texture(uBRDFLut, vec2(NdotL, uRoughness)).xyz;
+    vec3 E_i = texture(uBRDFLut, vec2(NdotV, uRoughness)).xyz;
+
+    vec3 E_avg = texture(uEavgLut, vec2(0, uRoughness)).xyz;
+    // copper
+    vec3 edgetint = vec3(0.827, 0.792, 0.678);
+    vec3 F_avg = AverageFresnel(albedo, edgetint);
+
+    // calculate fms and missing energy here
+    vec3 F_ms = (1.0 - E_o) * (1.0 - E_i) / (PI * (1.0 - E_avg));
+    vec3 F_add = F_avg * E_avg / (1.0 - F_avg * (1.0 - E_avg));
+
+    return F_add * F_ms;
+}
+
 void main(void) {
     vec4 color = texture(uAlbedoMap, vTextureCoord);
     if(color == vec4(0))
@@ -81,10 +104,11 @@ void main(void) {
 
     vec3 Lo = vec3(0.0);
 
+    // calculate per-light radiance
     vec3 L = normalize(uLightDir);
     vec3 H = normalize(V + L);
-    float NdotL = max(dot(N, L), 0.0);
-
+    float distance = length(uLightPos - vFragPos);
+    float attenuation = 1.0 / (distance * distance);
     vec3 radiance = uLightRadiance;
 
     float NDF = DistributionGGX(N, H, uRoughness);
@@ -92,8 +116,13 @@ void main(void) {
     vec3 F = fresnelSchlick(F0, V, H);
 
     vec3 numerator = NDF * G * F;
-    float denominator = max((4.0 * NdotL * NdotV), 0.001);
-    vec3 BRDF = numerator / denominator;
+    float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0);
+    vec3 Fmicro = numerator / max(denominator, 0.001);
+
+    float NdotL = max(dot(N, L), 0.0);
+
+    vec3 Fms = MultiScatterBRDF(NdotL, NdotV);
+    vec3 BRDF = Fmicro + Fms;
 
     Lo += BRDF * radiance * NdotL;
 

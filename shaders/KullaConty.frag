@@ -71,7 +71,11 @@ vec3 AverageFresnel(vec3 r, vec3 g) {
 }
 
 vec3 MultiScatterBRDF(float NdotL, float NdotV) {
-    vec3 albedo = pow(texture(uAlbedoMap, vTextureCoord).rgb, vec3(2.2));
+    vec4 color = texture(uAlbedoMap, vTextureCoord);
+    if(color == vec4(0))
+        color = vec4(uKd, 0.0);
+
+    vec3 albedo = pow(color.rgb, vec3(2.2));
 
     vec3 E_o = texture(uBRDFLut, vec2(NdotL, uRoughness)).xyz;
     vec3 E_i = texture(uBRDFLut, vec2(NdotV, uRoughness)).xyz;

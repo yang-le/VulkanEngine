@@ -170,7 +170,7 @@ int main(int argc, char* argv[]) {
             player->position = {4.18927, 1.0313, 2.07331};
             engine.set_player(std::move(player));
 
-            gltf::Model model(&engine.vulkan, "assets/cave/cave.gltf");
+            gltf::Model model(&engine.vulkan, "cave/cave.gltf");
             model.load();
 
             auto shadowPass = std::make_unique<Shadows>(engine);

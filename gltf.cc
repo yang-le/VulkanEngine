@@ -91,8 +91,8 @@ Model::Model(Vulkan* vulkan, const std::string& filename) : vulkan(vulkan) {
     auto extpos = filename.rfind('.', filename.length());
     if (extpos != std::string::npos) binary = (filename.substr(extpos + 1, filename.length() - extpos) == "glb");
 
-    bool fileLoaded = binary ? loader.LoadBinaryFromFile(&model, &err, &warn, filename)
-                             : loader.LoadASCIIFromFile(&model, &err, &warn, filename);
+    bool fileLoaded = binary ? loader.LoadBinaryFromFile(&model, &err, &warn, "assets/" + filename)
+                             : loader.LoadASCIIFromFile(&model, &err, &warn, "assets/" + filename);
     if (!err.empty()) std::cerr << err;
     if (!warn.empty()) std::cerr << warn;
     if (!fileLoaded) throw std::runtime_error("Fail to load: " + filename);

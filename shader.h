@@ -49,6 +49,7 @@ struct IShader {
 struct Shader : IShader {
     Shader() = default;
     Shader(const std::string &name, Engine &engine);
+    Shader(const std::string &vert_name, const std::string &frag_name, Engine &engine);
     virtual ~Shader();
 
     virtual void init();
@@ -94,7 +95,8 @@ struct Shader : IShader {
     std::map<int, Vulkan::Texture> textures;
     vk::ShaderModule vert_shader = {};
     vk::ShaderModule frag_shader = {};
-    std::string shader_name;
+    std::string vert_name;
+    std::string frag_name;
     vk::CullModeFlags cull_mode = vk::CullModeFlagBits::eBack;
     uint32_t draw_id = -1;
 

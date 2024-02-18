@@ -101,7 +101,7 @@ struct PrimitiveShader : ::Shader {
 
 struct Shader : ::Shader {
     Shader(const std::string& gltf_file, const std::string& name, Engine& engine)
-        : ::Shader(name, engine), model(&engine.vulkan, "assets/" + gltf_file) {
+        : ::Shader(name, engine), model(&engine.vulkan, gltf_file) {
         model.load();
     }
 

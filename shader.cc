@@ -27,13 +27,16 @@ std::vector<char> readFile(const std::string& filename) {
     const std::string& filename) {
     int width, height;
     stbi_uc* image = stbi_load(filename.c_str(), &width, &height, nullptr, STBI_rgb_alpha);
-    if (!image) throw std::runtime_error("Failed to load texture file: assets/" + filename);
+    if (!image) throw std::runtime_error("Failed to load texture file: " + filename);
     return {image, width, height};
 }
 }  // namespace
 
 Shader::Shader(const std::string& name, Engine& engine)
-    : shader_name(name), vulkan(&engine.vulkan), camera(&engine.get_player()) {}
+    : vert_name(name), frag_name(name), vulkan(&engine.vulkan), camera(&engine.get_player()) {}
+
+Shader::Shader(const std::string& vert_name, const std::string& frag_name, Engine& engine)
+    : vert_name(vert_name), frag_name(frag_name), vulkan(&engine.vulkan), camera(&engine.get_player()) {}
 
 Shader::~Shader() {
     vulkan->destroyVertexBuffer(vertex);
@@ -51,16 +54,16 @@ void Shader::init() {
 void Shader::load() {
     try {
         vert_shader = vulkan->createShaderModule(vk::ShaderStageFlagBits::eVertex,
-                                                 readFile("shaders/" + shader_name + ".vert").data());
+                                                 readFile("shaders/" + vert_name + ".vert").data());
     } catch (const std::exception&) {
-        std::cerr << "When compiling file: shaders/" + shader_name + ".vert\n";
+        std::cerr << "When compiling file: shaders/" + vert_name + ".vert\n";
         throw;
     }
     try {
         frag_shader = vulkan->createShaderModule(vk::ShaderStageFlagBits::eFragment,
-                                                 readFile("shaders/" + shader_name + ".frag").data());
+                                                 readFile("shaders/" + frag_name + ".frag").data());
     } catch (const std::exception&) {
-        std::cerr << "When compiling file: shaders/" + shader_name + ".frag\n";
+        std::cerr << "When compiling file: shaders/" + frag_name + ".frag\n";
         throw;
     }
 }

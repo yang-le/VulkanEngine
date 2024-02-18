@@ -61,7 +61,7 @@ int main(int argc, char* argv[]) {
 
         engine.set_player(std::move(player));
 
-        gltf::Model model(&engine.vulkan, "assets/ball.gltf");
+        gltf::Model model(&engine.vulkan, "ball.gltf");
         model.load();
 
         for (unsigned j = 0; j < 5; ++j)

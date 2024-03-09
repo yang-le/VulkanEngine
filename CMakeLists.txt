@@ -15,10 +15,11 @@ if (OpenMP_CXX_FOUND)
     set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS})
 endif (OpenMP_CXX_FOUND)
 find_package(imgui CONFIG REQUIRED)
+find_package(OpenAL CONFIG REQUIRED)
 
 include_directories(${CMAKE_SOURCE_DIR})
 
-add_library(vkegine vulkan.cc engine.cc player.cc shader.cc scene.cc gltf.cc)
+add_library(vkegine vulkan.cc engine.cc player.cc shader.cc scene.cc gltf.cc audio.cc)
 
 target_link_libraries(vkegine PUBLIC glfw)
 target_link_libraries(vkegine PUBLIC glm::glm)
@@ -26,6 +27,7 @@ target_link_libraries(vkegine PUBLIC glslang::SPIRV glslang::glslang-default-res
 target_link_libraries(vkegine PUBLIC Vulkan::Headers)
 target_link_libraries(vkegine PUBLIC GPUOpen::VulkanMemoryAllocator)
 target_link_libraries(vkegine PUBLIC imgui::imgui)
+target_link_libraries(vkegine PUBLIC OpenAL::OpenAL)
 
 add_subdirectory(examples)
 
